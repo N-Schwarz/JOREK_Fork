@@ -5,9 +5,9 @@ implicit none
 
 logical, parameter :: with_vpar       = .true.
 logical, parameter :: with_TiTe       = .false.
-logical, parameter :: with_neutrals   = .false. 
-logical, parameter :: with_impurities = .false.
-logical, parameter :: with_refluid    = .false. ! not yet possible to switch
+logical, parameter :: with_neutrals   = .true. 
+logical, parameter :: with_impurities = .true.
+logical, parameter :: with_refluid    = .true. ! not yet possible to switch
 
 
 ! ##################################################################################################
@@ -289,7 +289,7 @@ elemental pure logical function ext_available(i_ext)
   else if ( i_ext == i_ext_impurities ) then
     ext_available = .true.
   else if ( i_ext == i_ext_refluid ) then
-    ext_available = .false.
+    ext_available = .true.
   end if
   
 end function ext_available

@@ -22,6 +22,43 @@ subroutine preset_parameters
   nstep    = 0
   nstep_n  = 0
   
+  gamma_rel  = 39.d0
+  re_initialize = 0
+  vpar_re_sign = -1.d0
+  initial_re_current_fraction = 0
+  re_gauss_fact = 0.d0
+  re_gauss_origin = 0.d0
+  re_gauss_width = 0.1d0
+  re_curv_drift = .false.
+  re_trit_seed = .false.
+  re_compt_seed = .false.
+  re_sec_source = .false.
+  psinorm_aval_threshold = 1000.d0
+  re_adv_fact   = 1.d-3
+  Dre_par = 1.d-8
+  Dre_iso = 1.d-8
+  Dre_num  = 1.d-16
+
+ Dcontrad = .true.
+
+ impdens_init = 0.d0
+ impdens_1stinj  = 0.d0
+ tstart_imp_1stinj  = 1.d10
+ dt_imp_1stinj = 100
+ impdens_2ndinj  = 0.d0
+ tstart_imp_2ndinj = 1.d10
+ dt_imp_2ndinj = 100
+                    
+ Deutdens_1stinj = 0.d0
+ tstart_Deut_1stinj = 1.d10
+ dt_Deut_1stinj = 100
+ Deutdens_2ndinj = 0.d0
+ tstart_Deut_2ndinj = 1.d10
+ dt_Deut_2ndinj = 100
+
+
+
+
   eta_T_dependent   = .true.
   visco_T_dependent = .true.
   ZKpar_T_dependent = .true.

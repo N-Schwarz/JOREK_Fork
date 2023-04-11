@@ -208,7 +208,13 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 visco_par_heating, constant_imp_source,             &
                 T_min_ZKpar,Ti_min_ZKpar,Te_min_ZKpar,              &
                 CARIDDI_mode, use_newton, maxNewton, gamma_Newton,  &
-                alpha_Newton
+                alpha_Newton, 					    &
+                gamma_rel, re_initialize, re_gauss_width, re_gauss_origin, re_gauss_fact, initial_re_current_fraction, vpar_re_sign,   &
+                re_curv_drift, re_trit_seed, re_compt_seed, re_sec_source, re_adv_fact, Dre_par, Dre_iso, Dre_num,     &
+                impdens_init,  &
+                psinorm_aval_threshold, Dcontrad, &
+                impdens_1stinj, tstart_imp_1stinj, dt_imp_1stinj, impdens_2ndinj, tstart_imp_2ndinj, dt_imp_2ndinj, &
+                Deutdens_1stinj, tstart_Deut_1stinj, dt_Deut_1stinj, Deutdens_2ndinj, tstart_Deut_2ndinj, dt_Deut_2ndinj
 
 
 if (my_id .eq. 0) then

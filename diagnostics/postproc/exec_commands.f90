@@ -2041,7 +2041,7 @@ module exec_commands
     integer :: units, i_file
     character(len=1024) :: filename, status, access
     real*8 :: aminor, Bgeo, current, beta_p, beta_t, beta_n, density, density_in, density_out,     &
-      pressure, pressure_in, pressure_out, heat_src_in, heat_src_out, part_src_in, part_src_out
+      pressure, pressure_in, pressure_out, heat_src_in, heat_src_out, part_src_in, part_src_out, recurrent
     real*8 :: fact_mu_zero, fact_ne
     
     ierr = 0
@@ -2068,7 +2068,7 @@ module exec_commands
     if ( first_step ) then
       write(i_file,'(a)') '#               time            pressure         pressure_in        ' //&
         'pressure_out             density          density_in         density_out              ' //&
-        'beta_n              beta_t              beta_p            current'
+        'beta_n              beta_t              beta_p            current            recurrent'
     end if
     
     if ( units == SI_UNITS ) then
@@ -2082,11 +2082,11 @@ module exec_commands
     call integrals(node_list, element_list, ES%R_axis, ES%Z_axis, ES%psi_axis, ES%R_xpoint,        &
       ES%Z_xpoint, ES%psi_xpoint, ES%psi_lim, aminor, Bgeo, current, beta_p, beta_t, beta_n,       &
       density, density_in, density_out, pressure, pressure_in, pressure_out, heat_src_in,          &
-      heat_src_out, part_src_in, part_src_out)
+      heat_src_out, part_src_in, part_src_out,recurrent)
     
     write(i_file,'(33es20.13)') time_now, pressure/fact_mu_zero, pressure_in/fact_mu_zero,         &
       pressure_out/fact_mu_zero, density*fact_ne, density_in*fact_ne, density_out*fact_ne, beta_n, &
-      beta_t, beta_p, current
+      beta_t, beta_p, current, recurrent
     
     close(i_file)
     

@@ -298,6 +298,40 @@ module phys_module
   logical :: visco_num_T_dependent!< Hyper-visocsity dependent on temperature? Otherwise constant.
   logical :: add_sources_in_sc    !< Whether to add effect of sources in shock-capturing stabilization or not
 
+    ! Runaway electron fluid and deuterium neutrals related inputs
+  real*8  :: gamma_rel
+  integer*4 :: re_initialize
+  real*8  :: initial_re_current_fraction
+  real*8  :: re_gauss_fact
+  real*8  :: re_gauss_origin
+  real*8  :: re_gauss_width
+  logical :: re_trit_seed
+  logical :: re_compt_seed
+  logical :: re_sec_source
+  real*8  :: psinorm_aval_threshold
+  logical :: re_curv_drift
+  real*8  :: vpar_re_sign
+  real*8  :: re_adv_fact
+  real*8  :: Dre_par, Dre_iso, Dre_num
+
+  logical :: Dcontrad
+  
+  real*8  :: impdens_init
+  real*8  :: impdens_1stinj
+  real*8  :: tstart_imp_1stinj
+  real*8  :: dt_imp_1stinj
+  real*8  :: impdens_2ndinj
+  real*8  :: tstart_imp_2ndinj
+  real*8  :: dt_imp_2ndinj
+
+  real*8  :: Deutdens_1stinj
+  real*8  :: tstart_Deut_1stinj
+  real*8  :: dt_Deut_1stinj
+  real*8  :: Deutdens_2ndinj
+  real*8  :: tstart_Deut_2ndinj
+  real*8  :: dt_Deut_2ndinj
+
+
   !> @name Timestepping parameters
   real*8  :: tstep             		!< Size of the timesteps (\f$ \Delta t \f$)
   real*8  :: tstep_prev                 !< Previous time-step if using variable dt Gears
@@ -779,10 +813,10 @@ module phys_module
   !> @name Global quantities determined in each time step
   real*8, allocatable :: R_axis_t(:), Z_axis_t(:), psi_axis_t(:), R_xpoint_t(:,:), Z_xpoint_t(:,:),           &
     psi_xpoint_t(:,:), R_bnd_t(:), Z_bnd_t(:), psi_bnd_t(:),                                                  &
-    current_t(:), beta_p_t(:), beta_t_t(:), beta_n_t(:), density_in_t(:), density_out_t(:), pressure_in_t(:), &
+    current_t(:), re_current_t(:), beta_p_t(:), beta_t_t(:), beta_n_t(:), density_in_t(:), density_out_t(:), pressure_in_t(:), &
     pressure_out_t(:), heat_src_in_t(:), heat_src_out_t(:), part_src_in_t(:), part_src_out_t(:),   &
     E_tot_t(:), Helicity_tot_t(:), Kin_perp_tot_t(:), thermal_tot_t(:), kin_par_tot_t(:), ohmic_tot_t(:),      &
-    Wmag_tot_t(:), Ip_tot_t(:), flux_Pvn_t(:), flux_qpar_t(:), dE_tot_dt(:), flux_qperp_t(:), flux_kinpar_t(:), &
+    Wmag_tot_t(:), dEtot_RE_dt(:), dEkin_RE_dt(:), Ip_tot_t(:), Ipre_tot_t(:), flux_Pvn_t(:), flux_qpar_t(:), dE_tot_dt(:), flux_qperp_t(:), flux_kinpar_t(:), &
     dWmag_tot_dt(:), dthermal_tot_dt(:), dkinpar_tot_dt(:), dkinperp_tot_dt(:), friction_dissip_tot_t(:), &
     Magwork_tot_t(:), thmwork_tot_t(:), viscopar_dissip_tot_t(:), viscopar_flux_t(:), li3_t(:),      &
     li3_tot_t(:), part_src_tot_t(:), heat_src_tot_t(:), volume_t(:), area_t(:), mag_ener_src_tot(:), &

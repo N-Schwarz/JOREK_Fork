@@ -440,6 +440,16 @@ subroutine import_binary_restart(node_list, element_list, filename, format_rst, 
     if (allocated(mag_ener_src_tot)) call tr_deallocate(mag_ener_src_tot,"mag_ener_src_tot",CAT_UNKNOWN)
     call tr_allocate(mag_ener_src_tot,1,index_start+nstep,"mag_ener_src_tot",CAT_UNKNOWN)
     mag_ener_src_tot = 0.d0
+    
+#ifdef WITH_refluid
+    if (allocated(re_current_t)) call tr_deallocate(re_current_t,"re_current_t",CAT_UNKNOWN)
+    call tr_allocate(re_current_t,1,index_start+nstep,"re_current_t",CAT_UNKNOWN)
+    current_t = 0.d0
+        
+    if (allocated(Ipre_tot_t)) call tr_deallocate(Ipre_tot_t,"Ipre_tot_t",CAT_UNKNOWN)
+    call tr_allocate(Ipre_tot_t,1,index_start+nstep,"Ipre_tot_t",CAT_UNKNOWN)
+    Ipre_tot_t = 0.d0
+#endif
 
 #ifdef JECCD
     if (allocated(energies2)) call tr_deallocate(energies2,"energies2",CAT_UNKNOWN)
@@ -1561,6 +1571,18 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
     call tr_allocate(density_tot_t,1,index_start+nstep,"density_tot_t",CAT_UNKNOWN)
     density_tot_t = 0.d0
     call HDF5_array1D_reading(file_id,density_tot_t,'density_tot_t')
+
+#ifdef WITH_refluid
+    if (allocated(re_current_t)) call tr_deallocate(re_current_t,"re_current_t",CAT_UNKNOWN)
+    call tr_allocate(re_current_t,1,index_start+nstep,"re_current_t",CAT_UNKNOWN)
+    re_current_t = 0.d0
+    call HDF5_array1D_reading(file_id,re_current_t,'re_current_t')
+    
+    if (allocated(Ipre_tot_t)) call tr_deallocate(Ipre_tot_t,"Ipre_tot_t",CAT_UNKNOWN)
+    call tr_allocate(Ipre_tot_t,1,index_start+nstep,"Ipre_tot_t",CAT_UNKNOWN)
+    Ipre_tot_t = 0.d0
+    call HDF5_array1D_reading(file_id,Ipre_tot_t,'Ipre_tot_t')
+#endif    
 
 #ifdef JECCD                   
     if (allocated(t_energies2))   call tr_deallocate(t_energies2,"t_energies2",CAT_UNKNOWN)

@@ -221,6 +221,95 @@ real*8     :: Ptot, Ptot_x,  Ptot_y,  Ptot_p, Ptot_corr
 real*8     :: f_p, d_p, tau_sc, R_rho, R_pi, R_pe, R_p, R_rhon, my_zero = 0.d0
 real*8     :: s_p, src_rho, src_p, src_pi, src_pe, src_rhon
 
+!================== Parameters specific to runways electrons
+! Constants appearing in the n_re equation
+real*8     :: C14, fact_recd
+real*8     :: Vlight, Vlight_adv
+real*8     :: Ppar0
+real*8     :: TG_num9
+real*8     :: Dre_prof
+real*8     :: Dre_perp_num
+real*8     :: S_tritium, S_compton, S_avalanche, fact_ress, fact_recompt, fact_retrit, S_reseed_artificial
+real*8     :: pstar, ne_total_si
+integer*4  :: atomnum_imp 
+real*8     :: Trit_halflife, wcrit, wcrit_norm, func_of_wcritnorm
+real*8	   :: Egamma, zeee, Egnorm, costheta_c, sigma_thomson, sigma_compton, gamma_spectrum
+real*8     :: Clog0, Clogc, Clogee, Clogei, dClogee_dpstar, dClogei_dpstar, gamma_of_pstar, beta_of_pstar, hj, Epar0, nus, nud, nusprime, nudprime
+real*8, dimension(0:9) :: Iconst_Ne, aconst_Ne
+real*8, dimension(0:17) :: Iconst_Ar, aconst_Ar
+real*8, dimension(:), allocatable    :: Iconst, aconst
+real*8     :: Iconst_De, aconst_De
+real*8	   :: sum1, sum2, sum3, sum4, sum5
+real*8	   :: sum6, sum6D, sum7, sum7D, paj32, paj32_De
+real*8     :: hjk, hjk_De, d_hjkDe_dpstar, d_hjk_dpstar
+real*8	   :: nus0, nus1, nud0, nud1, phibr0, phibr1, tausync_inv
+real*8	   :: acoeff, bcoeff, ccoeff, dcoeff, Qfact, Rfact, Ddet, Ecrit, Ec_eff
+real*8     :: Ec_eff_old, funcval, derival
+integer*4  :: max_eciter, max_pstariter, neg_fail_count
+real*8     :: pstar_old, funcpstar, derivpstar, nimp_j
+
+
+! Matrix and RHS variables
+!real*8     :: ij9, kl9, ij10, kl10
+!real*8     :: rhs_ij_9, rhs_ij_9_k, rhs_ij_10, rhs_ij_10_k
+!real*8     :: amat_19
+!real*8     :: amat_29
+!real*8     :: amat_510
+!real*8     :: amat_69, amat_610
+!real*8     :: amat_91, amat_91_k, amat_92, amat_99, amat_99_k, amat_99_n, amat_99_kn
+!real*8     :: amat_105, amat_106, amat_108, amat_1010, amat_1010_kn
+
+real*8     :: nre0, nre0_x, nre0_y, nre0_p, nre0_s, nre0_t, nre0_ss, nre0_st, nre0_tt, nre0_xx, nre0_yy, nre0_xy
+real*8     :: nre, nre_x, nre_y, nre_s, nre_t, nre_p, nre_ss, nre_st, nre_tt, nre_xx, nre_yy, nre_xy
+
+real*8     :: Bgrad_nre_star,     Bgrad_nre, Bgrad_nre_k_star
+real*8     :: Bgrad_nre_star_psi, Bgrad_nre_psi, Bgrad_nre_nre, Bgrad_nre_nre_n
+
+fact_recd = 1.d0
+if (re_curv_drift .eq. .false.) fact_recd = 0.d0
+fact_ress = 1.d0
+if (re_sec_source .eq. .false.) fact_ress = 0.d0
+fact_recompt = 1.d0
+if (re_compt_seed .eq. .false.) fact_recompt = 0.d0
+fact_retrit = 1.d0
+if (re_trit_seed .eq. .false.) fact_retrit = 0.d0
+
+Ppar0 = sqrt( gamma_rel**2 - 1.d0 )
+Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+Vlight_adv = re_adv_fact * Vlight
+C14 =  (MASS_ELECTRON * Vlight) / ( EL_CHG * sqrt( MU_ZERO *  (central_mass * MASS_PROTON * central_density*1.d20) ) )
+
+! the variable implies ln(I_j^{-1})
+Iconst_Ar = (/ 7.9d0, 7.8d0, 7.6d0, 7.5d0, 7.3d0, 7.2d0, 7.d0, 6.8d0, 6.6d0, 6.5d0, 6.4d0, 6.2d0, 6.1d0, 5.9d0, 5.7d0, 5.3d0, 4.7d0, 4.7d0 /)
+Iconst_Ne = (/ 8.2d0, 8.d0, 7.9d0, 7.7d0, 7.5d0, 7.3d0, 7.d0, 6.6d0, 5.9d0, 5.8d0 /)
+Iconst_De = 10.1892d0
+
+! the variable implies ln(\bar{a_j})
+aconst_Ar = (/ 4.6d0, 4.5d0, 4.4d0, 4.4d0, 4.3d0, 4.2d0, 4.1d0, 4.d0, 3.9d0, 3.8d0, 3.7d0, 3.6d0, 3.6d0, 3.5d0, 3.3d0, 3.1d0, 2.6d0, 2.5d0 /)
+aconst_Ne = (/4.7d0, 4.6d0, 4.5d0, 4.4d0, 4.3d0, 4.1d0, 4.d0, 3.7d0, 3.2d0, 3.1d0 /)
+aconst_De = 5.3387d0
+
+if( with_impurities) then
+  if( trim(imp_type(index_main_imp)) .eq. 'Ne') atomnum_imp = 10
+  if( trim(imp_type(index_main_imp)) .eq. 'Ar') atomnum_imp = 18
+
+  if ( trim(imp_type(index_main_imp)) .eq. 'Ne' .or. trim(imp_type(index_main_imp)) .eq. 'Ar') then
+   allocate( Iconst(0:atomnum_imp-1), aconst(0:atomnum_imp-1) )
+     do j= 0, atomnum_imp - 1
+       if( trim(imp_type(index_main_imp)) .eq. 'Ne') then
+         Iconst(j) = Iconst_Ne(j)
+         aconst(j) = aconst_Ne(j)
+       elseif( trim(imp_type(index_main_imp)) .eq. 'Ar') then
+         Iconst(j) = Iconst_Ar(j)
+         aconst(j) = aconst_Ar(j)
+       endif
+     enddo
+  endif
+endif
+
+max_eciter = 40
+max_pstariter = 80
+
 if (present(get_terms)) then
   max_terms_loop = max_terms
 else
@@ -641,6 +730,28 @@ do i=1,n_vertex_max
             Vpar0_st = 0.d0
             Vpar0_tt = 0.d0
           end if
+          
+          if (with_refluid) then
+            nre0    = eq_g(mp,var_nre,ms,mt)
+            nre0_x  = (   y_t(ms,mt) * eq_s(mp,var_nre,ms,mt) - y_s(ms,mt) * eq_t(mp,var_nre,ms,mt) ) / xjac
+            nre0_y  = ( - x_t(ms,mt) * eq_s(mp,var_nre,ms,mt) + x_s(ms,mt) * eq_t(mp,var_nre,ms,mt) ) / xjac
+            nre0_p  = eq_p(mp,var_nre,ms,mt)
+            nre0_s  = eq_s(mp,var_nre,ms,mt)
+            nre0_t  = eq_t(mp,var_nre,ms,mt)
+            nre0_ss = eq_ss(mp,var_nre,ms,mt)
+            nre0_tt = eq_tt(mp,var_nre,ms,mt)
+            nre0_st = eq_st(mp,var_nre,ms,mt)
+          else
+            nre0    = 0.d0
+            nre0_x  = 0.d0
+            nre0_y  = 0.d0
+            nre0_p  = 0.d0
+            nre0_s  = 0.d0
+            nre0_t  = 0.d0
+            nre0_ss = 0.d0
+            nre0_tt = 0.d0
+            nre0_st = 0.d0
+          endif
 
           if (with_neutrals) then
             rn0      = eq_g(mp,var_rhon,ms,mt)
@@ -839,6 +950,22 @@ do i=1,n_vertex_max
                       - vpar0_s  * (x_st(ms,mt)*y_t(ms,mt) - x_tt(ms,mt)*y_s(ms,mt) )                             &
                       - vpar0_t * (x_st(ms,mt)*y_s(ms,mt)  - x_ss(ms,mt)*y_t(ms,mt) )  )  / xjac**2               &
                       - xjac_x * (- vpar0_s * x_t(ms,mt) + vpar0_t * x_s(ms,mt) )   / xjac**2
+                      
+          nre0_xx = (nre0_ss * y_t(ms,mt)**2 - 2.d0*nre0_st * y_s(ms,mt)*y_t(ms,mt) + nre0_tt * y_s(ms,mt)**2     &
+	    + nre0_s * (y_st(ms,mt)*y_t(ms,mt) - y_tt(ms,mt)*y_s(ms,mt) )                              &
+	    + nre0_t * (y_st(ms,mt)*y_s(ms,mt) - y_ss(ms,mt)*y_t(ms,mt) ) )    / xjac**2               &
+            - xjac_x * (nre0_s* y_t(ms,mt) - nre0_t * y_s(ms,mt))  / xjac**2
+
+          nre0_yy = (nre0_ss * x_t(ms,mt)**2 - 2.d0*nre0_st * x_s(ms,mt)*x_t(ms,mt) + nre0_tt * x_s(ms,mt)**2     &
+            + nre0_s * (x_st(ms,mt)*x_t(ms,mt) - x_tt(ms,mt)*x_s(ms,mt) )                              &
+	    + nre0_t * (x_st(ms,mt)*x_s(ms,mt) - x_ss(ms,mt)*x_t(ms,mt) ) )       / xjac**2            &	
+            - xjac_y * (- nre0_s * x_t(ms,mt) + nre0_t * x_s(ms,mt) )  / xjac**2 
+            
+          nre0_xy = (- nre0_ss * y_t(ms,mt)*x_t(ms,mt) - nre0_tt * x_s(ms,mt)*y_s(ms,mt)                       &
+                 + nre0_st * (y_s(ms,mt)*x_t(ms,mt)  + y_t(ms,mt)*x_s(ms,mt)  )                             &
+                 - nre0_s  * (x_st(ms,mt)*y_t(ms,mt) - x_tt(ms,mt)*y_s(ms,mt) )                             &
+                 - nre0_t * (x_st(ms,mt)*y_s(ms,mt)  - x_ss(ms,mt)*y_t(ms,mt) )  )  / xjac**2               &
+                 - xjac_x * (- nre0_s * x_t(ms,mt) + nre0_t * x_s(ms,mt) )   / xjac**2 
 
 
           Ti0_ps0_x = Ti0_xx * ps0_y - Ti0_xy * ps0_x + Ti0_x * ps0_xy - Ti0_y * ps0_xx
@@ -1072,7 +1199,7 @@ do i=1,n_vertex_max
           
           ! --- Hyper-resistivity
           if ( eta_num_psin_dependent ) then
-            eta_num_T   = eta_num * 0.5d0 * ( 1.d0 - tanh( (psi_norm-eta_num_prof(1))/eta_num_prof(2)) )      
+            eta_num_T   = eta_num * 0.5d0 * ( 1.d0 - tanh( (psi_norm-eta_num_prof(1))/eta_num_prof(2)) )
             deta_num_dT = 0.d0      
           else if ( eta_num_T_dependent ) then
             eta_num_T     =   eta_num   * (T_or_Te_corr/T_or_Te_0)**(-3.d0)
@@ -1166,7 +1293,11 @@ do i=1,n_vertex_max
 
           Dn0x = D_neutral_x      
           Dn0y = D_neutral_y      
-          Dn0p = D_neutral_p    
+          Dn0p = D_neutral_p
+          
+          ! RE diffusivities
+          Dre_prof = Dre_iso
+          Dre_perp_num = Dre_num
 
           ! --- Perpendicular heat diffusivities
           if ( with_TiTe ) then
@@ -1327,6 +1458,15 @@ do i=1,n_vertex_max
           ! For shock capturing stabilization
           tau_sc = 0.d0
           if (use_sc) call calculate_sc_quantities()
+          
+
+  BB2 = (F0*F0 + ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2 
+ 
+  S_avalanche = 0.d0
+  
+  if ( with_refluid .and. (psi_norm .lt. psinorm_aval_threshold) ) then
+     call compute_re_sources()
+  endif
 
 !--------------------------------------------------------
 
@@ -1371,9 +1511,42 @@ do i=1,n_vertex_max
             Bgrad_Ti          = ( F0 / BigR * Ti0_p +  Ti0_x * ps0_y - Ti0_y * ps0_x ) / BigR
             Bgrad_Te          = ( F0 / BigR * Te0_p +  Te0_x * ps0_y - Te0_y * ps0_x ) / BigR
             Bgrad_T           = ( F0 / BigR * T0_p  +  T0_x  * ps0_y - T0_y  * ps0_x ) / BigR
+            
+           Bgrad_nre_star = (  v_x  * ps0_y - v_y  * ps0_x ) / BigR  
+           Bgrad_nre_k_star = ( F0 / BigR * v_p   ) / BigR             
+           Bgrad_nre      = ( F0 / BigR * nre0_p +  nre0_x * ps0_y - nre0_y * ps0_x ) / BigR
 
-            BB2              = (F0*F0 + ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2
+            !BB2              = (F0*F0 + ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2
             Btheta2          = (ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2
+            
+           !####################################################################
+           !# For uniform 1st and 2nd injection of Impurities or Deuterium ions
+           !####################################################################
+           
+           ! Impurity source that increases linearly in time from 0 to , is activated over a time window of dt_imp_1stinj
+           if ( with_impurities .and. ( t_now .gt. tstart_imp_1stinj ) .and. ( t_now .lt. (tstart_imp_1stinj + dt_imp_1stinj) )  )  then
+               source_imp = impdens_1stinj / (central_density*1.d20 * m_i_over_m_imp) 
+               source_imp = source_imp / dt_imp_1stinj
+           endif
+           
+           ! Impurity 2nd injection source that increases linearly in time from 0 to , is activated over a time window of dt_imp_2nd_inj 
+           if ( with_impurities .and. ( t_now .gt. tstart_imp_2ndinj ) .and. ( t_now .lt. (tstart_imp_2ndinj + dt_imp_2ndinj) )  )  then
+               source_imp = impdens_2ndinj / (central_density*1.d20 * m_i_over_m_imp) 
+               source_imp = source_imp / dt_imp_2ndinj
+           endif
+           
+           ! Deuterium density source that increases linearly in time from 0 to , is activated over a time window of 106JU (~ 0.7ms)
+           if ( ( t_now .gt. tstart_Deut_1stinj ) .and. ( t_now .lt. (tstart_Deut_1stinj + dt_Deut_1stinj) )  )  then
+               particle_source(ms,mt) = Deutdens_1stinj / (central_density*1.d20 ) 
+               particle_source(ms,mt) = particle_source(ms,mt) / dt_Deut_1stinj
+           endif
+           
+           ! Deuterium density 2nd injection source that increases linearly in time from 0 to , is activated over a time window of dt_Deut_2nd_inj
+           if ( ( t_now .gt. tstart_Deut_2ndinj ) .and. ( t_now .lt. (tstart_Deut_2ndinj + dt_Deut_2ndinj) )  )  then
+               particle_source(ms,mt) = Deutdens_2ndinj / (central_density*1.d20 ) 
+               particle_source(ms,mt) = particle_source(ms,mt) / dt_Deut_2ndinj
+           endif
+           ! End of uniform 1st and 2nd injections
 
             v_ps0_x  = v_xx  * ps0_y - v_xy  * ps0_x + v_x  * ps0_xy - v_y * ps0_xx
             v_ps0_y  = v_xy  * ps0_y - v_yy  * ps0_x + v_x  * ps0_yy - v_y * ps0_xy
@@ -1391,7 +1564,7 @@ do i=1,n_vertex_max
             !#  Induction Equation                                                                             #
             !###################################################################################################
 
-            rhs_ij(var_psi) = v * eta_T  * (zj0 - current_source(ms,mt) - Jb)/ BigR           * xjac * tstep * factor(var_psi,1) &
+            rhs_ij(var_psi) = v * eta_T  * (zj0 - Vlight * F0 / (sqrt(BB2)*BigR) * nre0 - current_source(ms,mt) - Jb)/ BigR           * xjac * tstep * factor(var_psi,1) &
                       + v * (ps0_s * u0_t - ps0_t * u0_s)                                            * tstep * factor(var_psi,2) &
                       - v * F0 / BigR  * u0_p                                                 * xjac * tstep * factor(var_psi,2) &
                       + eta_num_T * (v_x * zj0_x + v_y * zj0_y)                               * xjac * tstep * factor(var_psi,3) &
@@ -1448,7 +1621,10 @@ do i=1,n_vertex_max
                              + BigR * F0 * (r0 * vpar0_p + vpar0 * r0_p) * (v_x * u0_x + v_y * u0_y)          * xjac * tstep &
                              + BigR**2 * r0 * (vpar0_x * ps0_y - vpar0_y * ps0_x) * (v_x * u0_x + v_y * u0_y) * xjac * tstep &
                              + BigR**2 * vpar0 * (r0_x * ps0_y - r0_y * ps0_x)    * (v_x * u0_x + v_y * u0_y) * xjac * tstep &
-                           ) * factor(var_u,10)   
+                           ) * factor(var_u,10)   								             &
+                         
+                         ! effect of RE drift orbit shift
+                         - fact_recd * v * C14 * Ppar0 * Vlight * nre0_y * xjac * tstep
             
             !------------------------------------------------------------------------ NEO
             if (NEO) then
@@ -1807,7 +1983,7 @@ do i=1,n_vertex_max
                             
                              - ZK_perp_num_psin*  (v_xx + v_x/Bigr + v_yy)*(T0_xx + T0_x/Bigr + T0_yy) * BigR * xjac * tstep * factor(var_T,7 ) &
                             
-                             + v * (GAMMA-1.d0) * eta_T_ohm * (zj0 / BigR)**2.d0         * BigR * xjac * tstep * factor(var_T,9 ) &
+                             + v * (GAMMA-1.d0) * eta_T_ohm / BigR**2 * (zj0 - Vlight * F0 / (sqrt(BB2) * BigR) * nre0)**2.d0         * BigR * xjac * tstep * factor(var_T,9 ) &
 
                              !===================== Additional terms from friction terms============
                              + v * BigR * ((GAMMA - 1.)/2.) * vpar0**2 * BB2 * ((r0+alpha_e*rimp0)*rn0*Sion_T) * xjac * tstep * factor(var_T,11) &
@@ -1980,6 +2156,28 @@ do i=1,n_vertex_max
 
             end if ! with_impurities
             
+            
+	   if (with_refluid) then
+           
+             rhs_ij(var_nre) =   v * BigR * zeta * delta_g(mp,9,ms,mt)                                                * xjac         &
+                             + v * BigR * ( fact_retrit*S_tritium + fact_recompt*S_compton + fact_ress*S_avalanche + S_reseed_artificial )                 * xjac * tstep &
+                             + v * BigR * 2.d0 * nre0 * u0_y                                                       * xjac * tstep &
+                             + v * BigR**2 * (nre0_x * u0_y - nre0_y * u0_x)                                       * xjac * tstep &
+                             - fact_recd * v * BigR * C14 / F0 * Ppar0 * Vlight_adv * nre0_y                       * xjac * tstep &
+                             - v * Vlight_adv / F0 * ( BigR * ( nre0_x * ps0_y - nre0_y * ps0_x ) + nre0 * ps0_y ) * xjac * tstep &
+                             - v * Vlight_adv / F0 * ( F0 * nre0_p )                                               * xjac * tstep &
+                             - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star * Bgrad_nre                      * xjac * tstep &
+                       	     - Dre_prof * BigR  * (v_x * nre0_x + v_y * nre0_y                                             )          * xjac * tstep &
+                             - Dre_perp_num * (v_xx + v_x/BigR + v_yy)*(nre0_xx + nre0_x/Bigr + nre0_yy) * BigR    * xjac * tstep &
+                             - TG_NUM9 * 0.5d0 * tstep * 0.5d0 * ( BigR**2 * (nre0_x * u0_y - nre0_y * u0_x) * ( v_x * u0_y - v_y * u0_x) + Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * ( v_x * ps0_y -  v_y * ps0_x                       ) &
+                                                                    + fact_recd * (C14 * Ppar0 * Vlight_adv / F0)**2  * v_y * nre0_y   ) * BigR * xjac * tstep
+
+             rhs_ij_k(var_nre) = - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_k_star * Bgrad_nre                      * xjac * tstep &
+                       	                - Dre_prof * BigR  * (                                                        v_p * nre0_p / BigR**2 )          * xjac * tstep   &
+                                        - TG_NUM9 * 0.5d0 * tstep * 0.5d0 * (  Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * (                       F0 / BigR * v_p)    ) * BigR * xjac * tstep
+
+           endif
+            
             !###################################################################################################
             !#  RHS equations end                                                                              #
             !###################################################################################################
@@ -2077,19 +2275,19 @@ do i=1,n_vertex_max
                   u_yy = psi_yy ;                    w_yy = psi_yy ; rho_yy = psi_yy ;  Ti_yy = psi_yy ; vpar_yy = psi_yy; Te_yy = psi_yy; T_yy = psi_yy;  rhoimp_yy = psi_yy ;
                   u_xy = psi_xy ;                    w_xy = psi_xy ; rho_xy = psi_xy ;  Ti_xy = psi_xy ; vpar_xy = psi_xy; Te_xy = psi_xy; T_xy = psi_xy;  rhoimp_xy = psi_xy ;
 
-                  rhon   = psi
-                  rhon_x = psi_x
-                  rhon_y = psi_y
-                  rhon_p = psi_p
-                  rhon_s = psi_s
-                  rhon_t = psi_t
-                  rhon_ss = psi_ss
-                  rhon_tt = psi_tt
-                  rhon_st = psi_st
+                  nre   = psi      ;  rhon   = psi
+                  nre_x = psi_x    ;  rhon_x = psi_x
+                  nre_y = psi_y    ;  rhon_y = psi_y
+                  nre_p = psi_p    ;  rhon_p = psi_p
+                  nre_s = psi_s    ;  rhon_s = psi_s
+                  nre_t = psi_t    ;  rhon_t = psi_t
+                  nre_ss = psi_ss  ;  rhon_ss = psi_ss
+                  nre_tt = psi_tt  ;  rhon_tt = psi_tt
+                  nre_st = psi_st  ;  rhon_st = psi_st
 
-                  rhon_xx = psi_xx
-                  rhon_yy = psi_yy
-                  rhon_xy = psi_xy
+                  nre_xx = psi_xx ;   rhon_xx = psi_xx
+                  nre_yy = psi_yy ;   rhon_yy = psi_yy
+                  nre_xy = psi_xy ;   rhon_xy = psi_xy
 
 
                   rho_hat   = BigR**2 * rho
@@ -2166,7 +2364,9 @@ do i=1,n_vertex_max
                               - v * tauIC*2./(r0_corr*BB2) * F0**3/BigR**3 * rho * Te0_p                     * xjac * theta * tstep &
 
                               - v * tauIC*2. * rho /(r0_corr**2 * BB2) * F0**2/BigR**2 * (ps0_s * Pe0_t - ps0_t * Pe0_s) * theta * tstep &
-                              + v * tauIC*2. * rho /(r0_corr**2 * BB2) * F0**3/BigR**3 * Pe0_p                    * xjac * theta * tstep 
+                              + v * tauIC*2. * rho /(r0_corr**2 * BB2) * F0**3/BigR**3 * Pe0_p                    * xjac * theta * tstep &
+
+                              - deta_dr0 * v * rho * (zj0 - Vlight * F0 / (sqrt(BB2) * BigR) * nre0 - current_source(ms,mt) - Jb) / BigR * xjac * theta * tstep
 
                   amat_n(var_psi,var_rho) = - v * tauIC*2./(r0_corr*BB2) * F0**3/BigR**3 * Te0  * rho_p           * xjac * theta * tstep 
 
@@ -2179,7 +2379,7 @@ do i=1,n_vertex_max
 
                     amat_n(var_psi,var_Te) = - v * tauIC*2./(r0_corr*BB2) * F0**3/BigR**3 * r0 * Te_p     * xjac * theta * tstep
                   else ! (with_TiTe = .f.), i.e. with single temperature *********************************
-                    amat(var_psi,var_T) = - deta_dT * v * T * (zj0 - current_source(ms,mt) - Jb)/ BigR    * xjac * theta * tstep &
+                    amat(var_psi,var_T) = - deta_dT * v * T * (zj0 - Vlight * F0 / (sqrt(BB2) * BigR) * nre0  - current_source(ms,mt) - Jb)/ BigR    * xjac * theta * tstep &
                                    - deta_num_dT * T * (v_x * zj0_x + v_y * zj0_y)                        * xjac * theta * tstep &
                               + v * tauIC/(r0_corr*BB2) * F0**2/BigR**2 * r0 * (ps0_s * T_t  - ps0_t * T_s)   * theta * tstep &
                               + v * tauIC/(r0_corr*BB2) * F0**2/BigR**2 * T  * (ps0_s * r0_t - ps0_t * r0_s)  * theta * tstep &
@@ -2189,7 +2389,11 @@ do i=1,n_vertex_max
                   end if ! (with_TiTe) *************************************************************
 
                   if (with_impurities) then
-                    amat(var_psi,var_rhoimp) = - deta_drimp0 * v * rhoimp * (zj0-current_source(ms,mt)-Jb) / BigR * xjac * theta * tstep
+                    amat(var_psi,var_rhoimp) = - deta_drimp0 * v * rhoimp * (zj0 - Vlight * F0 / (sqrt(BB2) * BigR) * nre0 - current_source(ms,mt)-Jb) / BigR * xjac * theta * tstep
+                  endif
+                  
+                  if (with_refluid) then
+                    amat(var_psi,var_nre) = v * eta_T / BigR * Vlight * F0 / (sqrt(BB2) * BigR) * nre * xjac * theta * tstep
                   endif
 
                   !###################################################################################################
@@ -2459,7 +2663,11 @@ do i=1,n_vertex_max
                               - BigR**2 * (v_s * rhoimp_t * alpha_e * Te0     - v_t * rhoimp_s * alpha_e * Te0)              * theta * tstep &
                               - BigR**2 * (v_s * rhoimp * alpha_e_bis * Te0_t - v_t * rhoimp * alpha_e_bis * Te0_s)          * theta * tstep
                   endif
-
+                  
+                  if (with_refluid) then
+                      amat(var_u,var_nre) = fact_recd * v * BigR * C14 * Ppar0 * Vlight / BigR * nre_y * xjac * theta * tstep
+		  endif
+                  
                   !###################################################################################################
                   !#  Current Definition Equation                                                                    #
                   !###################################################################################################
@@ -3775,7 +3983,8 @@ do i=1,n_vertex_max
                           + tgnum_T * 0.25d0 * BigR**2 * (r0+alpha_imp_bis*rimp0) * (T0_x * u0_y - T0_y * u0_x)                              &
                                              * ( v_x * u_y - v_y * u_x)                * xjac * theta * tstep * tstep 
   
-                    amat(var_T,var_zj)  = - v * (gamma-1.d0) * eta_T_ohm * 2.d0 * zj * zj0/(BigR**2.d0) * BigR * xjac * theta * tstep
+                    amat(var_T,var_zj)  = - v * BigR * zj * (GAMMA - 1.) * 2. / BigR**2 * eta_T_ohm * ( zj0 - Vlight * F0 / (sqrt(BB2) * BigR) * nre0 )      * xjac * theta * tstep
+                    
   
                     amat(var_T,var_rho) =   v * rho * T0   * BigR * xjac * (1.d0 + zeta)     &
                                           - v * rho * BigR**2 * ( T0_s  * u0_t - T0_t  * u0_s)                        * theta * tstep &
@@ -3795,7 +4004,8 @@ do i=1,n_vertex_max
                                           + v * BigR * rho * frad_bg                                           * xjac * theta * tstep &
                                           + v * BigR * rho * rimp0_corr * Lrad                                 * xjac * theta * tstep &
                                           ! New term from Z_eff
-                                          - v * BigR * rho * (GAMMA - 1.) * deta_dr0_ohm * (zj0/BigR)**2      * xjac * theta * tstep&
+                                          - v * BigR * rho * (GAMMA - 1.) * deta_dr0_ohm / BigR**2 * (zj0 - Vlight * F0 / (sqrt(BB2) * BigR)* nre0 )**2    * xjac * theta * tstep &
+
                     !=============== The ionization potential energy term=========================
                                           + (GAMMA - 1.) * v * rho * E_ion_bg * BigR * xjac * (1.d0 + zeta) &
                                           - (GAMMA - 1.) * v * E_ion_bg * BigR**2 * (rho_s * u0_t - rho_t * u0_s)            * theta * tstep &
@@ -3902,7 +4112,7 @@ do i=1,n_vertex_max
                                       
                                       + ZK_perp_num_psin*(v_xx + v_x/BigR + v_yy)*(T_xx + T_x/BigR + T_yy) * BigR * xjac * theta * tstep &
                                       
-                                      - v * T * (gamma-1.d0) * deta_dT_ohm * (zj0 / BigR)**2.d0         * BigR * xjac * theta * tstep &
+                                      - v * BigR * T * (GAMMA - 1.) * deta_dT_ohm / BigR**2 * ( zj0 - Vlight * F0 / (sqrt(BB2) * BigR) * nre0 ) **2       * xjac * theta * tstep  &
   
                                       + v * BigR * (r0+alpha_e*rimp0) * rn0           * ksiion * dSion_dT * T  * xjac * theta * tstep &
                                       + v * BigR * dalpha_e_dT*rimp0  * rn0           * ksiion * Sion_T   * T  * xjac * theta * tstep &
@@ -4028,6 +4238,8 @@ do i=1,n_vertex_max
                           + (GAMMA - 1.) * v * E_ion_bg * (r0-rimp0) * F0 / BigR * vpar_p       * xjac * theta * tstep
                       !================= End ionization potential energy ===========================
 
+                    end if ! (with_vpar)
+                    
                       if (with_neutrals) then
                         amat(var_T,var_rhon) = + v * BigR * (r0+alpha_e*rimp0) * rhon * ksiion * Sion_T * xjac * theta * tstep &
                                                + v * BigR * rhon * (r0_corr+alpha_e*rimp0_corr) * LradDrays_T * xjac * theta * tstep &
@@ -4074,7 +4286,7 @@ do i=1,n_vertex_max
                                  * ( v_x * ps0_y -  v_y * ps0_x                  ) * xjac * theta * tstep * tstep &
                         !===========================End of new TG_num terms===========================
                        ! New term from Z_eff
-                       - v * BigR * rhoimp * (GAMMA - 1.) * deta_drimp0_ohm * (zj0/BigR)**2 * xjac * theta * tstep &
+                       - v * BigR * rhoimp * (GAMMA - 1.) * deta_drimp0_ohm / BigR**2 * (zj0 - Vlight * F0 / (sqrt(BB2) * BigR)* nre0 )**2    * xjac * theta * tstep &
 
                        - v * rhoimp * BigR**2 * alpha_imp_bis * (T0_s * u0_t - T0_t * u0_s)     * theta * tstep &
                        - v * alpha_imp * T0 * BigR**2 * (rhoimp_s * u0_t - rhoimp_t * u0_s)       * theta * tstep &
@@ -4131,8 +4343,10 @@ do i=1,n_vertex_max
                         !=====================End of new TG_num terms=================================
 
                       endif
-
-                    end if ! (with_vpar)
+                      
+                  if (with_refluid) then
+                      amat(var_T,var_nre) = - v * BigR * (GAMMA - 1.) * eta_T_ohm / (BigR**2) * 2.d0 * ( zj0 - Vlight * F0 / (sqrt(BB2) * BigR) * nre0 ) * ( - Vlight * F0 / (sqrt(BB2) * BigR) * nre )    * xjac * theta * tstep
+                  end if
                     
                   end if ! (with_TiTe) *************************************************************
  
@@ -4307,6 +4521,59 @@ do i=1,n_vertex_max
                           * ( + F0 / BigR * v_p) * xjac * theta * tstep * tstep
 
                   endif
+                  
+                  
+                  !################################################################################################### 
+                  !#  RE number density equation                                                                      # 
+                  !################################################################################################### 
+                  
+                  Bgrad_nre_star_psi = ( v_x  * psi_y - v_y  * psi_x ) / BigR
+                  Bgrad_nre_psi      = ( nre0_x * psi_y - nre0_y * psi_x ) / BigR
+                  Bgrad_nre_nre      = (  nre_x * ps0_y - nre_y * ps0_x ) / BigR  
+                  Bgrad_nre_nre_n      = ( F0 / BigR * nre_p  ) / BigR 
+
+           	  if (with_refluid) then
+
+                       amat(var_nre, var_psi) =   v * Vlight_adv / F0 * ( BigR * ( nre0_x * psi_y - nre0_y * psi_x) + nre0 * psi_y ) * xjac * theta * tstep &
+                                               - (Dre_par-Dre_prof) * BigR * BB2_psi / BB2**2 * Bgrad_nre_star     * Bgrad_nre     * xjac * theta * tstep &
+                                               + (Dre_par-Dre_prof) * BigR / BB2              * Bgrad_nre_star_psi * Bgrad_nre     * xjac * theta * tstep &
+                                               + (Dre_par-Dre_prof) * BigR / BB2              * Bgrad_nre_star     * Bgrad_nre_psi * xjac * theta * tstep &
+                                               + TG_NUM9 * 0.5d0 * tstep * 0.5d0 * BigR *  Vlight_adv**2 / BB2 * 1.d0/BigR**2 *  ( (nre0_x * psi_y - nre0_y * psi_x) * ( v_x * ps0_y -  v_y * ps0_x              ) +   (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * ( v_x * psi_y -  v_y * psi_x ) ) * xjac * theta * tstep
+
+                       amat_k(var_nre, var_psi) =  &
+                                               - (Dre_par-Dre_prof) * BigR * BB2_psi/ BB2**2 * Bgrad_nre_k_star * Bgrad_nre * xjac * theta * tstep &
+                                               + (Dre_par-Dre_prof) * BigR / BB2             * Bgrad_nre_k_star * Bgrad_nre_psi * xjac * theta * tstep &
+                                               + TG_NUM9 * 0.5d0 * tstep * 0.5d0 * BigR *  Vlight_adv**2 / BB2 * 1.d0/BigR**2 *  ( (nre0_x * psi_y - nre0_y * psi_x) * (  F0 / BigR * v_p)  ) * xjac * theta * tstep
+                                 
+                       amat(var_nre, var_u) =  - v * BigR * 2.d0 * nre0 * u_y                                          * xjac * theta * tstep &
+                                               - v * BigR**2 * (nre0_s * u_t - nre0_t * u_s)                                   * theta * tstep &
+                                               + TG_NUM9 * 0.5d0 * tstep * 0.5d0 * BigR**3 * ( (nre0_x * u_y - nre0_y * u_x) * ( v_x * u0_y - v_y * u0_x) + (nre0_x * u0_y - nre0_y * u0_x) * ( v_x * u_y - v_y * u_x) ) * xjac * theta * tstep
+
+                       amat(var_nre, var_nre) =   v * BigR * (1 + zeta) * nre                                                   * xjac  &
+                                              + v * Vlight_adv / F0 * ( BigR * (nre_x * ps0_y - nre_y * ps0_x) + nre * ps0_y )       * xjac * theta * tstep &
+                                              - v * BigR * 2.d0 * nre * u0_y                                                         * xjac * theta * tstep &
+                                              - v * BigR**2 * (nre_s * u0_t - nre_t * u0_s)                                                 * theta * tstep &
+                                              + fact_recd * v * BigR * C14 / F0 * Ppar0 * Vlight_adv * nre_y                                         * xjac * theta * tstep &
+                                              + (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star * Bgrad_nre_nre                   * xjac * theta * tstep &
+                                              + Dre_prof * BigR  * (v_x*nre_x + v_y*nre_y                      )        * xjac * theta * tstep &
+                                              + Dre_perp_num  * (v_xx + v_x/BigR + v_yy) * (nre_xx + nre_x/BigR + nre_yy) * BigR     * xjac * theta * tstep &
+                                              + TG_NUM9 * 0.5d0 * tstep * 0.5d0 * BigR * ( BigR**2 * (nre_x * u0_y - nre_y * u0_x) * ( v_x * u0_y - v_y * u0_x) + Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre_x * psi_y - nre_y * psi_x ) * ( v_x * ps0_y -  v_y * ps0_x ) &
+                                                                 + fact_recd * (C14 * Ppar0 * Vlight_adv / F0)**2  * v_y * nre_y   ) * xjac * theta * tstep
+        
+                        amat_n(var_nre, var_nre) =   v * Vlight_adv / F0 * ( F0 * nre_p )                                               * xjac * theta * tstep &
+                                                    + (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star   * Bgrad_nre_nre_n       * xjac * theta * tstep &
+                                                    + TG_NUM9 * 0.5d0 * tstep * 0.5d0 * BigR * (Vlight_adv**2 / BB2 * 1.d0/BigR**2 * ( F0 / BigR * nre_p) * ( v_x * ps0_y -  v_y * ps0_x )   ) * xjac * theta * tstep
+                                                       
+
+                        amat_k(var_nre, var_nre) =  (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_k_star * Bgrad_nre_nre         * xjac * theta * tstep &
+                                                    + TG_NUM9 * 0.5d0 * tstep * 0.5d0 * BigR * ( Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre_x * psi_y - nre_y * psi_x ) * ( F0 / BigR * v_p)    ) * xjac * theta * tstep
+
+                        amat_kn(var_nre, var_nre) =   (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_k_star * Bgrad_nre_nre_n    * xjac * theta * tstep &
+                                                      + Dre_prof * BigR  * (v_p*nre_p /BigR**2 )        * xjac * theta * tstep &
+                                                      + TG_NUM9 * 0.5d0 * tstep * 0.5d0 * BigR * (  Vlight_adv**2 / BB2 * 1.d0/BigR**2 * ( F0 / BigR * nre_p) * ( F0 / BigR * v_p)   ) * xjac * theta * tstep
+
+                  endif
+                  
                   
                   !###################################################################################################
                   !# end equations                                                                                   #
@@ -4896,7 +5163,7 @@ subroutine construct_imp_charge_states()
      ! Convert from eV to JOREK unit
      E_ion     = E_ion * EL_CHG*MU_ZERO*central_density*1.d20*m_i_over_m_imp
      dE_ion_dT = dE_ion_dT * EL_CHG*MU_ZERO*central_density*1.d20*m_i_over_m_imp
-     dE_ion_dT = dE_ion_dT * dTe_corr_eV_dT * EL_CHG / K_BOLTZ ! Convert gradient from /K to /JOREK unit     
+     dE_ion_dT = dE_ion_dT * dTe_corr_eV_dT * EL_CHG / K_BOLTZ ! Convert gradient from /K to /JOREK unit
      E_ion_bg  = E_ion_bg * EL_CHG*MU_ZERO*central_density*1.d20
 
   else
@@ -5317,6 +5584,286 @@ subroutine construct_radiation_parameters()
   end if
   
 end subroutine construct_radiation_parameters
+
+
+  !=========================================
+  ! Computation of RE sources
+  !=========================================
+subroutine compute_re_sources
+
+implicit none
+
+  if (with_impurities .eq. .false.) then
+    ne_SI = r0_corr * 1.d20 * central_density
+    Z_eff = 1.d0
+  endif
+
+  !*********************************
+  ! Avalanche source
+  !*********************************
+  
+  Clog0 = 14.9d0 - 0.5d0 * log( ne_SI * 1.d-20 ) + log( Te_corr_eV * 1.d-3 )
+  Clogc = 14.6d0 + 0.5d0 * log ( Te_corr_eV / (ne_SI * 1.d-20) )
+  Epar0 = - F0/sqrt(BB2) * eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 )
+  Epar0 = Epar0 / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
+  Ecrit = (ne_SI * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
+  ne_total_si = central_density*1.d20 * ( r0 + rn0 )
+  if (with_impurities) then
+    ne_total_si = ne_total_si + central_density*1.d20 * ( alpha_e * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
+  endif
+  
+  ! Contribution from neutral deuterium
+  sum1 = ( central_density*1.d20 * rn0 / ne_SI ) * float( 1 - 0 )
+  sum2 = ( central_density*1.d20 * rn0 / ne_SI ) * float( 1 - 0 ) * Iconst_De 
+  sum3 = ( central_density*1.d20 * rn0 / ne_SI ) * float( 1**2 - 0**2) 
+  sum4 = ( central_density*1.d20 * rn0 / ne_SI ) * ( float( 1**2 - 0**2) * aconst_De - (2.d0/3.d0)* (float(1 - 0))**2 )
+  sum5 = ( central_density*1.d20 * rn0 / ne_SI ) * float( 1**2 )
+  
+  ! Contribution from unionized and partially ionized impurity states
+  if (with_impurities) then
+    if ( trim(imp_type(index_main_imp)) .eq. 'Ne' .or. trim(imp_type(index_main_imp)) .eq. 'Ar') then
+      do j= 0, atomnum_imp - 1
+       ! nimp_j is in SI units
+       nimp_j = central_density*1.d20 * m_i_over_m_imp * P_imp(j) * rimp0_corr
+       
+       sum1 = sum1 + (nimp_j / ne_SI ) * float( atomnum_imp - j)
+       sum2 = sum2 + (nimp_j / ne_SI ) * float( atomnum_imp - j) * Iconst(j)
+       sum3 = sum3 + (nimp_j / ne_SI ) * float( atomnum_imp**2 - j**2)
+       sum4 = sum4 + (nimp_j / ne_SI ) * ( float( atomnum_imp**2 - j**2) * aconst(j) - (2.d0/3.d0)* (float(atomnum_imp - j))**2 )
+       sum5 = sum5 + (nimp_j / ne_SI ) * float( atomnum_imp**2 )
+      end do
+    endif
+  endif
+  
+  
+    ! Computing Ec_eff
+    nus0 = 1.d0 + 1.d0/Clogc * (sum2 - sum1)
+    nus1 = 0.5d0/Clogc * ( 1.d0 + 3.d0*sum1)
+    nud0 = 1.d0 + Z_eff + 1.d0/Clogc * sum4
+    nud1 = 1.d0/Clogc * sum5
+    phibr0 = 0.35d0 * ALPHA_FINE_STRUCTURE /  Clogc * sum5
+    phibr1 = 0.2d0 * ALPHA_FINE_STRUCTURE /  Clogc * sum5
+    tausync_inv =  (1.d0/(15.44d0 * Clogc)) * BB2 / (ne_SI * 1.d-20)
+    
+    acoeff = 1.d0
+    bcoeff = -2.d0 * ( nus0 + nus1 * (1.d0 + nud1/nud0) * log(nud0/(2.d0*nus1)) )
+    ccoeff = ( nus0 + nus1 * (1.d0 + nud1/nud0) * log(nud0/(2.d0*nus1)) ) ** (2.d0)  -  nus1**2 * ( 2.d0 * (nud0/nus1**2) * (phibr0 + phibr1*log(0.5d0*nud0/nus1)) + 1.d0)
+    dcoeff = - 2.d0 * (nud0**2) * tausync_inv
+    
+    Qfact =  (3.d0*acoeff*ccoeff - bcoeff**2)/(9.d0*acoeff**2)
+    Rfact =  (9.d0*acoeff*bcoeff*ccoeff - 27.d0 * acoeff**2 * dcoeff  - 2.d0*bcoeff**3)/(54.d0*acoeff**3)
+    Ddet = Qfact**3 + Rfact**2
+    
+    if( Ddet .gt. 0.d0) then
+       Ec_eff =  (Rfact + sqrt(Ddet))**(1.d0/3.d0) + (Rfact - sqrt(Ddet))**(1.d0/3.d0)   - bcoeff/(3*acoeff)  ! Analytical solution
+       Ec_eff = Ecrit * Ec_eff  									      ! Unnormalizing
+    else
+       !write(*,*) 'Warning:: Determinant =',Ddet, 'So performing newton iterative solution.'
+       Ec_eff_old = ne_total_si / ne_SI
+       do i=1, max_eciter
+         funcval = Ec_eff_old - sqrt( -(dcoeff / Ec_eff_old) + 0.25d0 * bcoeff**2 - ccoeff )  + 0.5d0 * bcoeff
+         derival = 1.d0 - 0.5d0 * dcoeff / (Ec_eff_old**2) * ( -(dcoeff / Ec_eff_old) + 0.25d0 * bcoeff**2 - ccoeff ) ** (-0.5d0)
+         Ec_eff = Ec_eff_old - funcval / derival
+         if( abs ( (Ec_eff - Ec_eff_old) / Ec_eff_old ) .lt. 1.d-3) then
+            exit
+         else
+            Ec_eff_old = Ec_eff
+         endif
+         if (i .eq. max_eciter) then
+            write(*,*) 'No convergence for Ec_eff with current Ec_eff, psi_norm = ', Ec_eff, psi_norm, 'so stopping'
+            stop
+         endif
+       end do
+       Ec_eff = Ecrit * Ec_eff
+    endif  ! End of computing Ec_eff
+    
+   !write(*,*) j, pstar, k, Ec_eff / Ecrit  
+  
+  ! To compute p* via newton iterations. This provides nus(p*) and nud(p*) that are needed to evaluate S_avalanche
+  pstar_old = 1.d0
+  neg_fail_count = 0
+  do i=1, max_pstariter
+    !Clogee = Clogc + log( sqrt(gamma_of_pstar - 1.d0) )
+    !Clogei = Clogc + log( sqrt(2.d0) * pstar_old )  
+    gamma_of_pstar = sqrt(1.d0 + pstar_old**2)
+    Clogee = Clog0 + 0.2d0 * log ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG)   )**2.5d0 )
+    dClogee_dpstar = 0.2d0 / ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG)   )**2.5d0 ) * 2.5d0 * ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG)   )**1.5d0  * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG) * pstar_old / gamma_of_pstar
+    Clogei = Clog0 + 0.2d0 * log ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV * EL_CHG)   )**5.d0 )
+    dClogei_dpstar = 0.2d0 / ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV * EL_CHG)   )**5.d0 )  *  (2.d0 * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG) ) ** 2.5d0  *  ( 5.d0 * pstar_old**4)
+    beta_of_pstar = pstar_old**2 / (1.d0 + pstar_old**2)
+    
+    hjk_De = ( pstar_old * sqrt(gamma_of_pstar-1.d0) * exp(Iconst_De) ) **5.d0
+    d_hjkDe_dpstar = 5.d0 * ( pstar_old * sqrt(gamma_of_pstar-1.d0) * exp(Iconst_De) ) **4.d0  * exp(Iconst_De) * ( sqrt(gamma_of_pstar-1.d0) + pstar_old**2 / ( 2.d0 * gamma_of_pstar * sqrt(gamma_of_pstar-1.d0) ) )
+    
+    paj32_De = (pstar_old * exp(aconst_De))**1.5d0
+    
+   ! Contribution from neutral deuterium
+    sum6 = ( central_density*1.d20 * rn0 / ne_SI ) * float( 1 - 0 ) * (1.d0/5.d0) * log ( 1.d0 + hjk_De  )
+    sum6D = central_density*1.d20 * rn0 / ne_SI  * float( 1 - 0 ) * (1.d0/5.d0) * 1.d0 / ( 1.d0 + hjk_De  ) * d_hjkDe_dpstar
+    
+    sum7 = ( central_density*1.d20 * rn0 / ne_SI ) * (   2.d0/3.d0 * float( 1**2 - 0**2) * log ( paj32_De  + 1.d0 )  - 2.d0/3.d0 * (float(1 - 0))**2 * paj32_De / (paj32_De + 1.d0)  )
+    sum7D = central_density*1.d20 * rn0 / ne_SI  * (   2.d0/3.d0 * float( 1**2 - 0**2) * 1.d0 / ( paj32_De  + 1.d0 ) * 3.d0/2.d0 * sqrt(pstar_old) * (exp(aconst_De))**1.5d0  - 2.d0/3.d0 * (float(1 - 0))**2 * 3.d0/2.d0 / pstar_old * paj32_De / (paj32_De + 1.d0)**2.d0  )
+   ! Contribution from unionized and partially ionized impurity states
+   if (with_impurities) then
+    if ( trim(imp_type(index_main_imp)) .eq. 'Ne' .or. trim(imp_type(index_main_imp)) .eq. 'Ar') then
+     do j= 0, atomnum_imp - 1
+       nimp_j = central_density*1.d20 * m_i_over_m_imp * P_imp(j) * rimp0_corr
+       hjk = ( pstar_old * sqrt(gamma_of_pstar-1.d0) * exp(Iconst(j)) ) **5.d0
+       sum6 = sum6 + (nimp_j / ne_SI ) * float( atomnum_imp - j) * (1.d0/5.d0) * log ( 1.d0 + hjk  )
+       d_hjk_dpstar = 5.d0 * ( pstar_old * sqrt(gamma_of_pstar-1.d0) * exp(Iconst(j)) ) **4.d0  * exp(Iconst(j)) * ( sqrt(gamma_of_pstar-1.d0) + pstar_old**2 / ( 2.d0 * gamma_of_pstar * sqrt(gamma_of_pstar-1.d0) ) )
+       sum6D = sum6D + ( nimp_j / ne_SI ) * float( atomnum_imp - j ) * (1.d0/5.d0) * 1.d0 / ( 1.d0 + hjk  ) * d_hjk_dpstar
+       paj32 = (pstar_old * exp(aconst(j)))**1.5d0
+       sum7 = sum7 + (nimp_j / ne_SI ) * (   2.d0/3.d0 * float( atomnum_imp**2 - j**2) * log ( paj32  + 1.d0 )  - 2.d0/3.d0 * (float(atomnum_imp - j))**2 * paj32 / (paj32 + 1.d0)  )
+       sum7D = sum7D + ( nimp_j / ne_SI ) * (   2.d0/3.d0 * float( atomnum_imp**2 - j**2) * 1.d0 / ( paj32  + 1.d0 ) * 3.d0/2.d0 * sqrt(pstar_old) * (exp(aconst(j)))**1.5d0  - 2.d0/3.d0 * (float(atomnum_imp - j))**2 * 3.d0/2.d0 / pstar_old * paj32 / (paj32 + 1.d0)**2.d0  )
+     end do
+    endif
+   endif
+
+    !nus = (1.d0/Clogc) * ( Clogee + sum1 * ( log (pstar_old* sqrt(gamma_of_pstar-1.d0)) - beta_of_pstar**2.d0 ) + sum2 )
+    !nud = (1.d0/Clogc) * ( Clogee + Clogei*Z_eff + sum3 *log(pstar_old) + sum4 )
+    !nusprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + sum1 * ( 1.d0/pstar_old + pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + 4.d0 * (pstar_old/(1.d0+pstar_old**2))**3 ) )
+    !nudprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + Z_eff/pstar_old  + sum3/pstar_old ) 
+        
+    nus = (1.d0/Clogc) * ( Clogee - sum1 * beta_of_pstar**2.d0 + sum6 )
+    nud = (1.d0/Clogc) * ( Clogee + Clogei*Z_eff + sum7 )
+
+    nusprime = (1.d0/Clogc) * ( dClogee_dpstar  - sum1 * 4.d0 * (pstar_old/(1.d0+pstar_old**2))**3 + sum6D  )
+    nudprime = (1.d0/Clogc) * ( dClogee_dpstar  + Z_eff * dClogei_dpstar + sum7D )
+
+    !nusprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + sum1 * 4.d0 * (pstar_old/(1.d0+pstar_old**2))**3 + sum6D  )
+    !nudprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + Z_eff/pstar_old + sum7D )
+    
+    if( abs(Epar0) .ge. abs(Ec_eff) ) then
+      funcpstar = sqrt(abs(Epar0)/Ecrit) * pstar_old - (nus * nud)**(0.25d0)
+      derivpstar = sqrt(abs(Epar0)/Ecrit) - 0.25d0 * (nus * nud)**(-0.75d0) * (nus * nudprime + nud * nusprime)
+    else
+      funcpstar = sqrt(abs(Ec_eff)/Ecrit) * pstar_old - (nus * nud)**(0.25d0)
+      derivpstar = sqrt(abs(Ec_eff)/Ecrit) - 0.25d0 * (nus * nud)**(-0.75d0) * (nus * nudprime + nud * nusprime)
+    endif
+    
+    pstar = pstar_old - funcpstar / derivpstar
+    
+    if ( (pstar .lt. 0.d0) .or. (pstar .gt. 105000.d0)  .or. (pstar .ne. pstar) ) then
+      neg_fail_count = neg_fail_count + 1
+      if ( neg_fail_count .eq. 1) then
+         pstar = 3.5d0
+      elseif ( neg_fail_count .eq. 2) then
+         pstar = 12.d0
+      elseif ( neg_fail_count .eq. 3) then
+         pstar = 0.01d0
+      elseif ( neg_fail_count .eq. 4) then
+         pstar = 0.1d0
+      elseif ( neg_fail_count .eq. 5) then
+         pstar = 20.d0
+      elseif ( neg_fail_count .eq. 6) then
+         pstar = 300.d0
+      elseif ( neg_fail_count .eq. 7) then
+         pstar = 1200.d0
+      elseif ( neg_fail_count .eq. 8) then
+         pstar = 10000.d0
+      elseif ( neg_fail_count .eq. 9) then
+         pstar = 50000.d0
+      elseif ( neg_fail_count .eq. 10) then
+         pstar = 0.001d0
+      else
+         write(*,*) ''
+         write(*,*) 'Newton doesnt work at (R,Z) = ', BigR, y_g(ms,mt), 'even after 10 re-initializations of p*-guess, so stopping'
+         write(*,*) '(p*,nus,nud) =', pstar, nus, nud
+         write(*,*) ''
+         stop
+      endif
+    endif
+    
+    if( (abs ( (pstar - pstar_old) / pstar_old ) .lt. 1.d-3)  .and. (pstar .gt. 0.d0) .and. (nus .gt. 0.d0) .and. (nud .gt. 0.d0) ) then
+       !j=i  
+       exit
+    else
+       pstar_old = pstar
+    endif
+    
+    if (i .eq. max_pstariter) then
+       write(*,*) 'No convergence for pstar with current pstar, negfailcount = ', pstar, neg_fail_count, 'at (R,Z) = ',BigR, y_g(ms,mt)
+       stop
+    endif
+  end do  ! End of computing p*, nus(p*) and nud(p*)
+    
+    
+  ! Includes the possibility of a negative avalanche source when Epar < Eceff
+  if( ( vpar_re_sign * Epar0 .lt. 0.d0 )  ) then
+    S_avalanche = nre0 * EL_CHG / (MASS_ELECTRON * SPEED_OF_LIGHT * Clogc) * (ne_total_si / ne_SI) * ( abs(Epar0) - abs(Ec_eff) ) / sqrt( 4.d0 + nus * nud )
+    S_avalanche = sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * S_avalanche  ! time normalization factor coming from dnr/dt
+  else
+    S_avalanche = 0.d0
+  endif
+  
+  !if ( (S_avalanche .lt. 0.d0) .and. (abs(nre0) .gt. 1.d-10) .and.  (re_sec_source) ) then
+  !  write(*,*) 'Negative avalanche source = ',Epar0, Ec_eff, S_avalanche,' so stopping'
+  !  write(*,*) pstar, nre0, nus, nud
+  !  stop
+  !endif
+  
+  wcrit = MASS_ELECTRON * SPEED_OF_LIGHT**(2.d0) * ( sqrt(pstar**2 + 1.d0) - 1.d0 )
+  wcrit_norm = wcrit / (18.6d0 * 1.d3 * EL_CHG)
+  
+  !*********************************
+  ! Seed from tritium decay
+  !*********************************
+  Trit_halflife = 4500.d0 * 24.d0 * 3600.d0
+  if( wcrit_norm .gt. 0.99998d0) then
+    func_of_wcritnorm =  0.d0
+  else
+    func_of_wcritnorm =  1.d0 - (35.d0/8.d0) * wcrit_norm**(1.5d0) + (21.d0/4.d0) * wcrit_norm**(2.5d0) - (15.d0/8.d0) * wcrit_norm**(3.5d0)
+  endif
+  
+  !S_tritium = log(2.d0) / Trit_halflife * 0.5d0 * (r0 - rimp0 + rn0) * central_density*1.d20 * func_of_wcritnorm  ! Assumed that there were initially equal quantities of deuterium and tritium to start with and no new Deuterium is added. Needs to be improved.
+  S_tritium = log(2.d0) / Trit_halflife * 0.5d0 * eq_zne(ms,mt) * central_density*1.d20 * func_of_wcritnorm
+  S_tritium = ( EL_CHG * BigR * MU_ZERO ) * S_tritium
+  
+  if ( (S_tritium .lt. 0.d0) .and. (re_trit_seed) ) then
+    write(*,*) 'Negative tritium source =', pstar, func_of_wcritnorm, S_tritium,' so stopping'
+    write(*,*) wcrit, wcrit_norm
+    stop
+  endif
+
+
+  !*********************************
+  ! Seed from compton scattering
+  !*********************************
+  sigma_thomson = 8.d0 * PI / 3.d0 * EL_RAD**2
+  S_compton = 0.d0
+  do i= 1, 1000  ! 0 is 0MeV, 1000 is 100MeV, step size is 0.1MeV
+        Egamma = float(i) * 0.1d0
+        zeee = ( log(Egamma) + 1.2d0 ) / 0.8d0
+        gamma_spectrum =  4.44d17 * exp( - exp(-zeee) - zeee + 1.d0 )
+        Egamma = Egamma * 1.d6 * EL_CHG
+        costheta_c = 1.d0 - ( MASS_ELECTRON * SPEED_OF_LIGHT**(2.d0) / Egamma ) * (wcrit/Egamma) / (1.d0 - wcrit/Egamma)
+    if ( (Egamma .gt. wcrit) .and. (costheta_c .gt. 0.d0) ) then
+        Egnorm = Egamma / ( MASS_ELECTRON * SPEED_OF_LIGHT**(2.d0) )
+        sigma_compton = (3.d0/8.d0) * sigma_thomson * ( (Egnorm**2 - 2.d0 * Egnorm - 2.d0)/Egnorm**3 * log( (1 + 2.d0*Egnorm)/(1.d0 + Egnorm*(1.d0-costheta_c)) )  &
+                                                       + (0.5d0/Egnorm) * ( 1.d0 / (1.d0 + Egnorm*(1.d0-costheta_c))**2 - 1.d0 / (1.d0 + 2.d0 * Egnorm)**2  )      &
+                                                       - (1.d0/Egnorm**3) * ( 1.d0 - Egnorm - (1 + 2.d0*Egnorm)/(1.d0 + Egnorm*(1.d0-costheta_c)) - Egnorm * costheta_c )  )
+
+       ! if (costheta_c .lt. 0.d0) write(*,*) 'sigma_compton = ', costheta_c, sigma_compton
+
+        ! Integration by trapezoidal rule
+        if( (i .eq. 1) .or. (i .eq. 1000) ) then
+          S_compton = S_compton + 0.5d0 * 0.1d0 * (gamma_spectrum * sigma_compton)
+        else
+          S_compton = S_compton + 0.5d0 * 0.1d0 * (2.d0 * gamma_spectrum * sigma_compton)
+        endif
+    endif
+  end do
+
+  S_compton = ( EL_CHG * BigR * MU_ZERO ) * ne_total_si * S_compton
+  
+  if ( (S_compton .lt. 0.d0)  .and. (re_compt_seed) ) then
+    write(*,*) 'Negative compton source = ',S_compton,' so stopping'
+    stop
+  endif
+
+end subroutine compute_re_sources
+
+
 
 end subroutine element_matrix_fft
 
