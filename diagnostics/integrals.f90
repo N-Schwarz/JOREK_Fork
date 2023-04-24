@@ -84,7 +84,7 @@ integer*8  :: ion_i, ion_k, i_phi
 #endif
 
 real*8     :: BB2, dpsidx, dpsidy
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 real*8     :: recurrent_in, recurrent_out
 real*8     :: Cre_intern, Cre_ext, Cre_hel
 real*8     :: nre0, Vlight
@@ -115,7 +115,7 @@ heat_src_out = 0.d0
 part_src_in  = 0.d0
 part_src_out = 0.d0
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 Cre_intern = 0.d0
 Cre_ext    = 0.d0
 Cre_hel    = 0.d0
@@ -202,7 +202,7 @@ do ife =1, element_list%n_elements
       rn0_corr = corr_neg_dens1(rhon_00)
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
   nre0 = eq_g(var_nre,ms,mt)
 #endif
 
@@ -315,7 +315,7 @@ do ife =1, element_list%n_elements
         C_hel = C_hel + ZJ_0 /BigR  * xjac * wst
         Area   = Area   + xjac * wst
         
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
         Cre_intern = Cre_intern + Vlight * F0/(sqrt(BB2)*BigR) * nre0 /BigR  * xjac * 2.d0 * PI * BigR * wst
         Cre_hel = Cre_hel + Vlight * F0/(sqrt(BB2)*BigR) * nre0 /BigR  * xjac * wst
 #endif
@@ -334,7 +334,7 @@ do ife =1, element_list%n_elements
         heat_src_out = heat_src_out + 2.d0 * PI * BigR * xjac * wst * heat_src
         part_src_out = part_src_out + 2.d0 * PI * BigR * xjac * wst * part_src
         
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
         Cre_ext = Cre_ext + Vlight * F0/(sqrt(BB2)*BigR) * nre0 /BigR  * xjac * 2.d0 * PI * BigR * wst
 #endif        
       endif
@@ -349,7 +349,7 @@ pressure_in  = P_int
 pressure_out = P_ext
 current_in   = -C_intern
 current_out  = -C_ext
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 recurrent_in   = -Cre_intern
 recurrent_out  = -Cre_ext
 #endif
@@ -358,7 +358,7 @@ current = -C_hel / MU_zero
 beta_p  = 8.d0 * PI * P_hel / (C_hel**2 )
 beta_t  = 2.d0 * P_hel / Bgeo**2 / (Area)
 beta_n  = 100.d0 * (4.*PI/10.) * beta_t / (MU_zero * abs(current) /  (aminor * Bgeo))
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 recurrent = -Cre_hel/MU_zero
 #else
 recurrent = 0.d0
@@ -366,7 +366,7 @@ recurrent = 0.d0
 
 write(*,'(A,f16.7)')    ' psi_limit        : ',psi_limit
 write(*,'(A,f16.7,A)')  ' current          : ',current/1.e6,' MA'
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 write(*,'(A,f16.7,A)')  ' RE current       : ',recurrent/1.e6,' MA'
 #endif
 write(*,'(A,f16.7)')    ' beta_p           : ',beta_p
@@ -380,7 +380,7 @@ write(*,'(A,2es18.7,A)') ' Part.src (in/out): ', part_src_in, part_src_out
 write(*,'(A,5f10.5)') ' density  (total/in/out)  : ',density,  density_in,  density_out 
 write(*,'(A,5f10.5)') ' pressure (total/in/out)  : ',pressure, pressure_in, pressure_out 
 write(*,'(A,5f10.5)') ' current  (in/out)        : ',current_in, current_out 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 write(*,'(A,5f10.5)') ' Runaway current (in/out) : ',recurrent_in, recurrent_out 
 #endif
 

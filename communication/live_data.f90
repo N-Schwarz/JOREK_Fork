@@ -495,7 +495,7 @@ module live_data
     write(LIVE_DATA_HANDLE,'(A)') '@current: %"time"       "Total"    "Inside LCFS"   "Outside LCFS" '
     write(LIVE_DATA_HANDLE,*)
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
     write(LIVE_DATA_HANDLE,'(A,I5)') '@n_recurrent: ', 3 
     write(LIVE_DATA_HANDLE,'(A)') '@recurrent_xlabel: normalized time'
     write(LIVE_DATA_HANDLE,'(A)') '@recurrent_xlabel_si: time [ms]'
@@ -799,7 +799,7 @@ module live_data
     write(LIVE_DATA_HANDLE,'(A,6ES17.9)') '@bnd_point: ', xtime(index), R_bnd_t(index), Z_bnd_t(index), Psi_bnd_t(index)
 
     write(LIVE_DATA_HANDLE,'(A,5ES17.9)') '@current: ', xtime(index), Ip_tot_t(index), current_t(index), Ip_tot_t(index)-current_t(index)
-#if (defined WITH_refluid)
+#if (defined WITH_Refluid)
     write(LIVE_DATA_HANDLE,'(A,5ES17.9)') '@recurrent: ', xtime(index), Ipre_tot_t(index), re_current_t(index), Ipre_tot_t(index)-re_current_t(index)
 #endif
     write(LIVE_DATA_HANDLE,'(A,5ES17.9)') '@betas: ', xtime(index), beta_p_t(index), beta_t_t(index), beta_n_t(index)

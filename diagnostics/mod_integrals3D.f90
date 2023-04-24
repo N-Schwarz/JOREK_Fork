@@ -174,10 +174,10 @@ real*8, allocatable :: local_source_volume(:), local_source_volume_drift(:)
 
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 real*8  :: Cre_intern, Cre_ext
 real*8  :: re_current_in, re_current_out, re_current_tot
-real*8  :: Vlight, nre0
+real*8  :: Vlight, nre0, C14
 #endif
 
     ! For Ec_tot, Ec_eff and S_avalanche calculations
@@ -402,7 +402,7 @@ if (.not. allocated(local_source_volume)) allocate (local_source_volume(1)) ! Al
 if (.not. allocated(local_source_volume_drift)) allocate (local_source_volume_drift(1)) 
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
  Cre_intern = 0.d0
  Cre_ext = 0.d0
  Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
@@ -449,7 +449,7 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp          local_radiation, local_radiation_phi, imp_cor, imp_adas, imp_type, local_P_ei,  &
 !$omp          n_adas, nimp_bg, local_radiation_bg,                                            &
 #endif
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 !$omp          Cre_intern, Cre_ext, Vlight, fact_ress, C14,			                       &
 #endif
 !$omp         atomnum_imp, Iconst_Ne, aconst_Ne, Iconst_Ar, aconst_Ar, Iconst_De, aconst_De, Iconst, aconst, max_eciter, max_pstariter, &
@@ -503,7 +503,7 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp 		hjk, hjk_De, d_hjkDe_dpstar, d_hjk_dpstar,&
 !$omp 		pstar, pstar_old, funcpstar, derivpstar, nimp_j,&
 !$omp 		S_avalanche, &
-#ifdef WITH_refluid                                                                                    
+#ifdef WITH_Refluid                                                                                    
 !$omp           nre0,                                                          &                       
 #endif 
 #if (defined WITH_Impurities) && (defined WITH_TiTe)
@@ -537,7 +537,7 @@ omp_tid      = 0
 !$omp                local_radiation, local_radiation_phi, local_E_ion, local_P_ei, local_P_ion, &
 !$omp                local_source_volume, local_source_volume_drift, local_radiation_bg,      &
 #endif
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 !$omp                Cre_intern, Cre_ext,					              &
 #endif
 !$omp                D_int, D_ext, P_int, H_int, S_int, H_ext, S_ext, P_ext, C_intern, C_ext, &
@@ -678,7 +678,7 @@ do ife = ife_min, ife_max
         T0e_corr = T0_corr / 2.d0
         T0i_corr = T0_corr / 2.d0
 #endif
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 	nre0     = eq_g(mp,var_nre,ms,mt)
 #endif
         zj0    = eq_g(mp,var_zj,ms,mt)
@@ -1036,7 +1036,7 @@ do ife = ife_min, ife_max
 #endif /* WITH_TiTe */
 #endif /* WITH_Impurities */
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 	  E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 )  )
 #else
 	  E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * zj0 )
@@ -1194,7 +1194,7 @@ do ife = ife_min, ife_max
         VK_tot = VK_tot + r0 * (dudx**2 + dudy**2) * BigR**2 * xjac * BigR * wst * delta_phi
         VM_tot = VM_tot + (dpsidx**2+dpsidy**2)/BigR**2 * xjac * BigR * wst * delta_phi
         
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
         J2_tot = J2_tot + eta_T_ohm/(BigR)**2.d0 * (ZJ0 - Vlight * F0 / (sqrt(BB2)*BigR) * nre0  )**2.d0 * xjac * BigR * wst * delta_phi
         VM_regain = VM_regain - (1.d0 / BigR) * F0/sqrt(BB2) * ( eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 ) ) * ( Vlight * F0 /(sqrt(BB2) * BigR) * nre0 ) * xjac * BigR * wst * delta_phi    ! Epar * J_phi
         VM_rekegain = VM_rekegain + (1.d0 / BigR) * Ec_eff * ( Vlight * F0 /(sqrt(BB2) * BigR) * nre0 ) * xjac * BigR * wst * delta_phi    ! Epar * J_phi
@@ -1431,7 +1431,7 @@ do ife = ife_min, ife_max
           VK_int = VK_int + r0 * (dudx**2 + dudy**2) * BigR**2 * xjac * BigR * wst * delta_phi
           VM_int = VM_int + (dpsidx**2+dpsidy**2)/BigR**2 * xjac * BigR * wst * delta_phi
 
-#ifdef WITH_refluid        
+#ifdef WITH_Refluid        
           Cre_intern = Cre_intern +  abs(Vlight) * F0/(sqrt(BB2)*BigR) * nre0 / BigR * xjac * wst * delta_phi
           J2_int = J2_int + eta_T_ohm/(BigR)**2.d0 * (ZJ0 - Vlight * F0 / (sqrt(BB2)*BigR) * nre0  )**2.d0 * xjac * BigR * wst * delta_phi
 #else
@@ -1481,7 +1481,7 @@ do ife = ife_min, ife_max
           VK_ext = VK_ext + r0 * (dudx**2 + dudy**2) * BigR**2 * xjac * BigR * wst * delta_phi
           VM_ext = VM_ext + (dpsidx**2+dpsidy**2)/BigR**2 * xjac * BigR * wst * delta_phi
           
-#ifdef WITH_refluid       
+#ifdef WITH_Refluid       
           Cre_ext = Cre_ext +  abs(Vlight) * F0/(sqrt(BB2)*BigR) * nre0 / BigR * xjac * wst * delta_phi
           J2_ext = J2_ext + eta_T_ohm/(BigR)**2.d0 * (ZJ0 - Vlight * F0 / (sqrt(BB2)*BigR) * nre0  )**2.d0 * xjac * BigR * wst * delta_phi
 #else
@@ -1622,7 +1622,7 @@ do m_bndelem = 1, bnd_elm_list%n_bnd_elements
       rimp0_corr = 0.d0 
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
       nre0       = eq_g_1D(mp,var_nre ,ms)
 #endif
 
@@ -2089,7 +2089,7 @@ if (allocated(local_source_volume_drift)) deallocate(local_source_volume_drift)
   neut_particles_tot = 0.d0
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 #ifndef NOMPIVERSION
 call MPI_AllReduce(Cre_intern,re_current_in,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
 call MPI_AllReduce(Cre_ext,re_current_out,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
@@ -2171,7 +2171,7 @@ total_P_ei          = n_period * total_P_ei
 total_P_ion         = n_period * total_P_ion
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 re_current_in           = n_period * re_current_in  * fact_mu0  / (2.d0 * PI)
 re_current_out          = n_period * re_current_out * fact_mu0  / (2.d0 * PI)
 re_current_tot  	= re_current_in + re_current_out
@@ -2452,7 +2452,7 @@ if (my_id .eq. 0) then
       case ( 'Ip_tot' )
         res(iexpr+1) = current_tot 
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
       case ( 'Ipre_tot' )
         res(iexpr+1) = re_current_tot
 #endif
@@ -2603,7 +2603,7 @@ if (my_id .eq. 0) then
   write(*,'(A,4es14.6,A)') ' Implicit heating  (total/in/out): ',xt,heating_impl_tot/1.d6,heating_impl_in/1.d6, heating_impl_out/1.d6 ,' [MW]'
   write(*,'(A,3es14.6,A)') ' source   (in/out)               : ',xt,source_in, source_out,' [10^20/m^3/s]'
   write(*,'(A,4es14.6,A)') ' Ohmic    (in/out)               : ',xt,Ohm_tot/1.d6, Ohm_in/1.d6, Ohm_out/1.d6,' [MW]'
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
   write(*,'(A,3es14.6,A)') ' REcurrent  (in/out)             : ',xt,re_current_in/1.d6, re_current_out/1.d6, ' [MA]'
 #endif
   
@@ -2717,7 +2717,7 @@ if (my_id .eq. 0) then
     part_flux_vpar_t(index_now)      = vpar_part_flux
     part_flux_vperp_t(index_now)     = vperp_part_flux
     npart_flux_t(index_now)          = neut_part_flux
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
     Ipre_tot_t(index_now)            = re_current_tot
     re_current_t(index_now)          = re_current_in
 #endif

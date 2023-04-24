@@ -951,10 +951,10 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
 #endif
 
    !< Additional log for REs
-#if (defined WITH_refluid)
+#if (defined WITH_Refluid)
      write(*,REAL_FMT) 'gamma_rel           ',  gamma_rel
      write(*,INTG_FMT) 're_initialize       ',  re_initialize
-     write(*,REAL_FMT) 'initial_re_current_fraction ',  initial_re_fraction
+     write(*,REAL_FMT) 'initial_re_current_fraction ',  initial_re_current_fraction
      write(*,REAL_FMT) 're_gauss_fact       ',  re_gauss_fact
      write(*,REAL_FMT) 're_gauss_origin     ',  re_gauss_origin
      write(*,REAL_FMT) 're_gauss_width      ',  re_gauss_width
@@ -967,7 +967,7 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
      write(*,REAL_FMT) 'Dre_par             ',  Dre_par
      write(*,REAL_FMT) 'Dre_iso        	    ',  Dre_iso
      write(*,REAL_FMT) 'Dre_num             ',  Dre_num
-     write(*,REAL_FMT) 'vpar_re_sign        ',  vpar_re_sign   
+     write(*,REAL_FMT) 'vpar_re_sign        ',  vpar_re_sign
 #endif
 
   write(*,LOGI_FMT) 'restart_particles   ',restart_particles

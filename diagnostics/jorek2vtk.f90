@@ -283,6 +283,9 @@ if ( SI_units ) then
    if (with_Vpar) then
       variable_names_si(var_Vpar)='Vpar_km/s   '
    endif
+   if (with_refluid) then
+      variable_names_si(var_nre)='nre_m-3   '
+   endif
 #endif
 
 #if (defined WITH_Neutrals) || (defined WITH_Impurities)
@@ -1596,6 +1599,12 @@ if (SI_units) then
     !===================================== Impurity density in 1e20m-3
     scalars(i,var_rhoimp) = scalars(i,var_rhoimp) * central_density * m_i_over_m_imp
 #endif
+
+#ifdef WITH_Refluid
+    !===================================== RE density in 1e17m-3
+    scalars(i,var_nre) = scalars(i,var_nre) * sqrt(rho_norm / MU_zero) / EL_CHG / BigR 
+#endif
+
     !=====================Pressure in kPa
     if (include_fluxes) scalars(i,i_flux(1)) = scalars(i,i_flux(1)) / MU_zero/1.e3
     if (include_neo) then

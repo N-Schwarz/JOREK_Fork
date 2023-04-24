@@ -231,7 +231,7 @@ module mod_expression
     call add(exprs_all, 'brem        ', 'Brem terms for bolometry diagnostic                   ')
     call add(exprs_all, 'line_rad    ', 'D neutral line radiation                              ')
 #endif
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
     call add(exprs_all, 'nre         ', 'Runaway electron number density                       ')
     call add(exprs_all, 'recurrdens  ', 'Physical RE Toroidal Current Density (== zjre/R)      ')
     call add(exprs_all, 'rho_neutd   ', 'Deuterium neutrals mass density                       ')
@@ -1576,7 +1576,7 @@ max_pstariter = 80
           neut_part_flux= 0.d0
 #endif 
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
           !reperp_flux= - Dre_prof  * ( nre0_R*nmlR + nre0_Z*nmlZ)  &
                           !+ Dre_prof *(BR*nre0_R + BZ*nre0_Z + Btor*nre0_p/R) * Bnorm / BB2
           repar_flux = Vlight * nre0 * Bnorm / sqrt(BB2) - Dre_par  * (BR*nre0_R + BZ*nre0_Z + Btor*nre0_p/R) * Bnorm / BB2
@@ -1659,11 +1659,11 @@ max_pstariter = 80
           !E_par = - R * ( eta_T * zj0 / R**2                                                       &
           !              + 2.d0*tauIC / r0 * ( (Pi0_R * Ps0_Z - Pi0_Z * Ps0_R) / R + F0 * Pi0_p / R**2 ) )
 
-	#ifdef WITH_reflui
+#ifdef WITH_Refluid
 	    E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 )  ) + 2.d0*tauIC / r0 * ( (Pi0_R * Ps0_Z - Pi0_Z * Ps0_R) / R + F0 * Pi0_p / R**2 )
-	#else
+#else
 	    E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * zj0 ) + 2.d0*tauIC / r0 * ( (Pi0_R * Ps0_Z - Pi0_Z * Ps0_R) / R + F0 * Pi0_p / R**2 )
-	#endif
+#endif
           
           E_crit = C_LIGHT**2 * EL_CHG**3 * ln_Lambda * MU_ZERO**2.5 * (central_density*1.d20*central_mass*MASS_PROTON)**1.5 * r0 / ( 4 * PI * MASS_ELECTRON * MASS_PROTON * central_mass )
           
@@ -1786,7 +1786,7 @@ max_pstariter = 80
   
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 	  E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 ) + tauIC / r0 * ( (P0_R * Ps0_Z - P0_Z * Ps0_R) / R + F0 * P0_p / R**2 )  )
 #endif
 
@@ -2041,7 +2041,7 @@ ne_SI = ne_SI / 1.d20 / central_density ! Put ne_SI back to JOREK units to have 
               case ( 'index_now' )
                 res = real(index_now)
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
               case ( 'nre' )
                 res = nre0 * fact_nre
 

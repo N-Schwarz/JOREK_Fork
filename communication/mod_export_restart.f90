@@ -653,7 +653,7 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
      call HDF5_array1D_saving(file_id,area_t(1:index_now),index_now,'area_t'//char(0))
      call HDF5_array1D_saving(file_id,volume_t(1:index_now),index_now,'volume_t'//char(0))
      call HDF5_array1D_saving(file_id,mag_ener_src_tot(1:index_now),index_now,'mag_ener_src_tot'//char(0))
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
      call HDF5_array1D_saving(file_id,re_current_t(1:index_now),index_now,'re_current_t'//char(0))
      call HDF5_array1D_saving(file_id,Ipre_tot_t(1:index_now),index_now,'Ipre_tot_t'//char(0))
 #endif

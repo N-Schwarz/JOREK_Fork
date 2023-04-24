@@ -124,7 +124,7 @@ local_n_particles     = 0.d0
 
 
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 #endif
 
@@ -145,7 +145,7 @@ ife_max   = min((my_id +1) * ife_delta, element_list%n_elements)
 !$omp parallel default(none)                                                                   &
 !$omp   shared(element_list,node_list, H, H_s, H_t, HZ, HZ_p, ife_min, ife_max, xpoint, xcase, &
 !$omp          ES, my_id, use_pellet, psi_limit, delta_phi,                                    &
-!$omp          D_tot, D_int, D_Ext, P_tot, P_int, P_ext, Vol, C_intern, C_ext, VP_ext, VP_int, &
+!$omp          D_tot, D_int, D_Ext, P_tot, P_int, P_ext, Vol, C_intern, C_ext, Cre_intern, Cre_ext, Vlight, VP_ext, VP_int, &
 !$omp          VK_ext, VK_int, VK_tot, VM_ext, VM_int, VM_tot, J2_tot, J2_ext, J2_int,         &
 !$omp          TVP_int, TVP_ext, TVP_tot,                                                      &
 !$omp          H_int, H_ext, S_int, S_ext, F0, VP_tot, eta_ohmic, eta_T_dependent,             &
@@ -174,7 +174,7 @@ ife_max   = min((my_id +1) * ife_delta, element_list%n_elements)
 #if (defined WITH_Neutrals) && (!defined WITH_Impurities)
 !$omp           rn0, source_neutral, source_neutral_drift, source_neutral_arr, source_neutral_drift_arr, &
 #endif
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 !$omp           nre0,                                                          &
 #endif
 !$omp           omp_nthreads,omp_tid)
@@ -311,7 +311,7 @@ do ife = ife_min, ife_max
         rn0    = eq_g(mp,var_rhon,ms,mt)
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
         nre0    = eq_g(mp,9,ms,mt)
 #endif
 
@@ -360,7 +360,7 @@ do ife = ife_min, ife_max
         TVP_tot= TVP_tot+ r0 * vpar0    * sqrt(BB2) * xjac * BigR * wst * delta_phi
         VK_tot = VK_tot + r0 * (dudx**2 + dudy**2) * BigR**2 * xjac * BigR * wst * delta_phi
         VM_tot = VM_tot + (dpsidx**2+dpsidy**2)/BigR**2 * xjac * BigR * wst * delta_phi
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
         J2_tot = J2_tot + eta_T_ohm/(BigR)**2.d0 * (ZJ0 - Vlight * F0 / (sqrt(BB2)*BigR) * nre0  )**2.d0 * xjac * BigR * wst * delta_phi
 #else
         J2_tot = J2_tot + eta_T_ohm * (ZJ0/BigR)**2 * xjac * BigR * wst * delta_phi
@@ -426,7 +426,7 @@ do ife = ife_min, ife_max
           VK_int = VK_int + r0 * (dudx**2 + dudy**2) * BigR**2 * xjac * BigR * wst * delta_phi
           VM_int = VM_int + (dpsidx**2+dpsidy**2)/BigR**2 * xjac * BigR * wst * delta_phi
           
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
              Cre_intern = Cre_intern +  abs(Vlight) * F0/(sqrt(BB2)*BigR) * nre0 / BigR * xjac * wst * delta_phi
              J2_int = J2_int + eta_T_ohm/(BigR)**2.d0 * (ZJ0 - Vlight * F0 / (sqrt(BB2)*BigR) * nre0  )**2.d0 * xjac * BigR * wst * delta_phi
 #else
@@ -445,7 +445,7 @@ do ife = ife_min, ife_max
           VK_ext = VK_ext + r0 * (dudx**2 + dudy**2) * BigR**2 * xjac * BigR * wst * delta_phi
           VM_ext = VM_ext + (dpsidx**2+dpsidy**2)/BigR**2 * xjac * BigR * wst * delta_phi
           
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
              Cre_ext = Cre_ext +  abs(Vlight) * F0/(sqrt(BB2)*BigR) * nre0 / BigR * xjac * wst * delta_phi
              J2_ext = J2_ext + eta_T_ohm/(BigR)**2.d0 * (ZJ0 - Vlight * F0 / (sqrt(BB2)*BigR) * nre0  )**2.d0 * xjac * BigR * wst * delta_phi
 #else
@@ -504,7 +504,7 @@ endif
   call MPI_AllReduce(local_n_particles, total_n_particles,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 call MPI_AllReduce(Cre_intern,recurrent_in,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
 call MPI_AllReduce(Cre_ext,recurrent_out,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
 #endif
@@ -540,7 +540,7 @@ heating_in  = n_period * heating_in  / MU_zero / t_norm * 1.5d0
 source_out  = n_period * source_out  * central_density / t_norm
 source_in   = n_period * source_in   * central_density / t_norm
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
 recurrent_in  = n_period * recurrent_in  / MU_zero / (2.d0 * PI)
 recurrent_out = n_period * recurrent_out / MU_zero / (2.d0 * PI)
 #endif
@@ -583,7 +583,7 @@ if (my_id .eq. 0) then
   write(*,'(A,4e14.6)')   ' Integrals_3D, MGI : ', total_n_particles_inj, total_n_particles
 #endif
 
-#ifdef WITH_refluid
+#ifdef WITH_Refluid
   write(*,'(A,3e14.6,A)') ' REcurrent  (in/out)       : ',xt,recurrent_in/1.d6, recurrent_out/1.d6, ' [MA]'
 #endif
 
