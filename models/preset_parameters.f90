@@ -29,7 +29,6 @@ subroutine preset_parameters
   re_gauss_fact = 0.d0
   re_gauss_origin = 0.d0
   re_gauss_width = 0.1d0
-  re_curv_drift = .false.
   re_trit_seed = .false.
   re_compt_seed = .false.
   re_sec_source = .false.

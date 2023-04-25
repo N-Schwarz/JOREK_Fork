@@ -666,10 +666,9 @@ module mod_expression
 
     real*8 :: nre0, nre0_s, nre0_t, nre0_ss, nre0_tt, nre0_st, nre0_p, nre0_pp, nre0_R, nre0_Z
     real*8 :: repar_flux, reperp_flux, E_crit_eff
-    real*8 :: fact_nre, Vlight, C14
+    real*8 :: fact_nre, Vlight
 
     Vlight = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
-    C14 =  (MASS_ELECTRON * Vlight) / ( EL_CHG * sqrt( MU_ZERO *  (central_mass * MASS_PROTON * central_density*1.d20) ) )
 
    ! the variable implies ln(I_j^{-1})
 Iconst_Ar = (/ 7.9d0, 7.8d0, 7.6d0, 7.5d0, 7.3d0, 7.2d0, 7.d0, 6.8d0, 6.6d0, 6.5d0, 6.4d0, 6.2d0, 6.1d0, 5.9d0, 5.7d0, 5.3d0, 4.7d0, 4.7d0 /)
@@ -1581,9 +1580,6 @@ max_pstariter = 80
                           !+ Dre_prof *(BR*nre0_R + BZ*nre0_Z + Btor*nre0_p/R) * Bnorm / BB2
           repar_flux = Vlight * nre0 * Bnorm / sqrt(BB2) - Dre_par  * (BR*nre0_R + BZ*nre0_Z + Btor*nre0_p/R) * Bnorm / BB2
           reperp_flux = nre0 * ( -R*u0_Z * nmlR + R*u0_R * nmlZ )
-          if(re_curv_drift .eq. .true.) then
-              reperp_flux = reperp_flux + nre0 * (C14/F0)*sqrt(gamma_rel**2 - 1.d0) * Vlight * nmlZ
-          endif
 #else
           repar_flux= 0.d0
           reperp_flux= 0.d0

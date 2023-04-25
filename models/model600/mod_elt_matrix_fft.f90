@@ -223,7 +223,6 @@ real*8     :: s_p, src_rho, src_p, src_pi, src_pe, src_rhon
 
 !================== Parameters specific to runways electrons
 ! Constants appearing in the n_re equation
-real*8     :: C14, fact_recd
 real*8     :: Vlight, Vlight_adv
 real*8     :: Ppar0
 real*8     :: Dre_prof
@@ -264,8 +263,6 @@ real*8     :: nre, nre_x, nre_y, nre_s, nre_t, nre_p, nre_ss, nre_st, nre_tt, nr
 real*8     :: Bgrad_nre_star,     Bgrad_nre, Bgrad_nre_k_star
 real*8     :: Bgrad_nre_star_psi, Bgrad_nre_psi, Bgrad_nre_nre, Bgrad_nre_nre_n
 
-fact_recd = 1.d0
-if (re_curv_drift .eq. .false.) fact_recd = 0.d0
 fact_ress = 1.d0
 if (re_sec_source .eq. .false.) fact_ress = 0.d0
 fact_recompt = 1.d0
@@ -276,7 +273,6 @@ if (re_trit_seed .eq. .false.) fact_retrit = 0.d0
 Ppar0 = sqrt( gamma_rel**2 - 1.d0 )
 Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 Vlight_adv = re_adv_fact * Vlight
-C14 =  (MASS_ELECTRON * Vlight) / ( EL_CHG * sqrt( MU_ZERO *  (central_mass * MASS_PROTON * central_density*1.d20) ) )
 
 ! the variable implies ln(I_j^{-1})
 Iconst_Ar = (/ 7.9d0, 7.8d0, 7.6d0, 7.5d0, 7.3d0, 7.2d0, 7.d0, 6.8d0, 6.6d0, 6.5d0, 6.4d0, 6.2d0, 6.1d0, 5.9d0, 5.7d0, 5.3d0, 4.7d0, 4.7d0 /)
@@ -1620,10 +1616,7 @@ do i=1,n_vertex_max
                              + BigR * F0 * (r0 * vpar0_p + vpar0 * r0_p) * (v_x * u0_x + v_y * u0_y)          * xjac * tstep &
                              + BigR**2 * r0 * (vpar0_x * ps0_y - vpar0_y * ps0_x) * (v_x * u0_x + v_y * u0_y) * xjac * tstep &
                              + BigR**2 * vpar0 * (r0_x * ps0_y - r0_y * ps0_x)    * (v_x * u0_x + v_y * u0_y) * xjac * tstep &
-                           ) * factor(var_u,10)   								             &
-                         
-                         ! effect of RE drift orbit shift
-                         - fact_recd * v * C14 * Ppar0 * Vlight * nre0_y * xjac * tstep
+                           ) * factor(var_u,10)
             
             !------------------------------------------------------------------------ NEO
             if (NEO) then
@@ -2162,14 +2155,13 @@ do i=1,n_vertex_max
                              + v * BigR * ( fact_retrit*S_tritium + fact_recompt*S_compton + fact_ress*S_avalanche + S_reseed_artificial )                 * xjac * tstep &
                              + v * BigR * 2.d0 * nre0 * u0_y                                                       * xjac * tstep &
                              + v * BigR**2 * (nre0_x * u0_y - nre0_y * u0_x)                                       * xjac * tstep &
-                             - fact_recd * v * BigR * C14 / F0 * Ppar0 * Vlight_adv * nre0_y                       * xjac * tstep &
                              - v * Vlight_adv / F0 * ( BigR * ( nre0_x * ps0_y - nre0_y * ps0_x ) + nre0 * ps0_y ) * xjac * tstep &
                              - v * Vlight_adv / F0 * ( F0 * nre0_p )                                               * xjac * tstep &
                              - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star * Bgrad_nre                      * xjac * tstep &
                        	     - Dre_prof * BigR  * (v_x * nre0_x + v_y * nre0_y                                             )          * xjac * tstep &
                              - Dre_perp_num * (v_xx + v_x/BigR + v_yy)*(nre0_xx + nre0_x/Bigr + nre0_yy) * BigR    * xjac * tstep &
                              - tgnum_nre * 0.5d0 * tstep * 0.5d0 * ( BigR**2 * (nre0_x * u0_y - nre0_y * u0_x) * ( v_x * u0_y - v_y * u0_x) + Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * ( v_x * ps0_y -  v_y * ps0_x                       ) &
-                                                                    + fact_recd * (C14 * Ppar0 * Vlight_adv / F0)**2  * v_y * nre0_y   ) * BigR * xjac * tstep
+                                                                       ) * BigR * xjac * tstep
 
              rhs_ij_k(var_nre) = - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_k_star * Bgrad_nre                      * xjac * tstep &
                        	                - Dre_prof * BigR  * (                                                        v_p * nre0_p / BigR**2 )          * xjac * tstep   &
@@ -2662,10 +2654,7 @@ do i=1,n_vertex_max
                               - BigR**2 * (v_s * rhoimp_t * alpha_e * Te0     - v_t * rhoimp_s * alpha_e * Te0)              * theta * tstep &
                               - BigR**2 * (v_s * rhoimp * alpha_e_bis * Te0_t - v_t * rhoimp * alpha_e_bis * Te0_s)          * theta * tstep
                   endif
-                  
-                  if (with_refluid) then
-                      amat(var_u,var_nre) = fact_recd * v * BigR * C14 * Ppar0 * Vlight / BigR * nre_y * xjac * theta * tstep
-		  endif
+
                   
                   !###################################################################################################
                   !#  Current Definition Equation                                                                    #
@@ -4552,12 +4541,11 @@ do i=1,n_vertex_max
                                               + v * Vlight_adv / F0 * ( BigR * (nre_x * ps0_y - nre_y * ps0_x) + nre * ps0_y )       * xjac * theta * tstep &
                                               - v * BigR * 2.d0 * nre * u0_y                                                         * xjac * theta * tstep &
                                               - v * BigR**2 * (nre_s * u0_t - nre_t * u0_s)                                                 * theta * tstep &
-                                              + fact_recd * v * BigR * C14 / F0 * Ppar0 * Vlight_adv * nre_y                                         * xjac * theta * tstep &
                                               + (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star * Bgrad_nre_nre                   * xjac * theta * tstep &
                                               + Dre_prof * BigR  * (v_x*nre_x + v_y*nre_y                      )        * xjac * theta * tstep &
                                               + Dre_perp_num  * (v_xx + v_x/BigR + v_yy) * (nre_xx + nre_x/BigR + nre_yy) * BigR     * xjac * theta * tstep &
                                               + tgnum_nre * 0.5d0 * tstep * 0.5d0 * BigR * ( BigR**2 * (nre_x * u0_y - nre_y * u0_x) * ( v_x * u0_y - v_y * u0_x) + Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre_x * psi_y - nre_y * psi_x ) * ( v_x * ps0_y -  v_y * ps0_x ) &
-                                                                 + fact_recd * (C14 * Ppar0 * Vlight_adv / F0)**2  * v_y * nre_y   ) * xjac * theta * tstep
+                                                                    ) * xjac * theta * tstep
         
                         amat_n(var_nre, var_nre) =   v * Vlight_adv / F0 * ( F0 * nre_p )                                               * xjac * theta * tstep &
                                                     + (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star   * Bgrad_nre_nre_n       * xjac * theta * tstep &

@@ -309,7 +309,6 @@ module phys_module
   logical :: re_compt_seed
   logical :: re_sec_source
   real*8  :: psinorm_aval_threshold
-  logical :: re_curv_drift
   real*8  :: vpar_re_sign
   real*8  :: re_adv_fact
   real*8  :: Dre_par, Dre_iso, Dre_num

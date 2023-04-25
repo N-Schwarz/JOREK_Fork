@@ -177,7 +177,7 @@ real*8, allocatable :: local_source_volume(:), local_source_volume_drift(:)
 #ifdef WITH_Refluid
 real*8  :: Cre_intern, Cre_ext
 real*8  :: re_current_in, re_current_out, re_current_tot
-real*8  :: Vlight, nre0, C14
+real*8  :: Vlight, nre0
 #endif
 
     ! For Ec_tot, Ec_eff and S_avalanche calculations
@@ -406,7 +406,6 @@ if (.not. allocated(local_source_volume_drift)) allocate (local_source_volume_dr
  Cre_intern = 0.d0
  Cre_ext = 0.d0
  Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
- C14 =  (MASS_ELECTRON * Vlight) / ( EL_CHG * sqrt( MU_ZERO *  (central_mass * MASS_PROTON * central_density*1.d20) ) )
 #endif
 
 delta_phi     = 2.d0 * PI / float(n_plane) / float(n_period)
@@ -450,7 +449,7 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp          n_adas, nimp_bg, local_radiation_bg,                                            &
 #endif
 #ifdef WITH_Refluid
-!$omp          Cre_intern, Cre_ext, Vlight, fact_ress, C14,			                       &
+!$omp          Cre_intern, Cre_ext, Vlight, fact_ress			                       &
 #endif
 !$omp         atomnum_imp, Iconst_Ne, aconst_Ne, Iconst_Ar, aconst_Ar, Iconst_De, aconst_De, Iconst, aconst, max_eciter, max_pstariter, &
 #if (defined WITH_Neutrals) && (!defined WITH_Impurities)
