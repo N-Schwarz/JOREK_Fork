@@ -28,7 +28,6 @@ real*8     :: zjz, dj_dpsi, dj_dR, dj_dZ, dj_dR_dZ, dj_dR_DR, dj_dZ_dZ, dj_dpsi2
 real*8     :: zp, dp_dpsi, dp_dpsi2, dp_dz, dp_dz2, dp_dpsi_dz, P_ss, P_st, P_tt, R_out,Z_out,s_out,t_out
 real*8     :: ps0_s, ps0_t, p_s, p_t, zj0_s, zj0_t,R_s, R_t, ps0_x, ps0_y, Z_s, Z_t, xjac, direction, Btot
 logical    :: xpoint2
-!=============================MB:  parallel velocity profile
 real*8     :: zV, dV_dpsi, dV_dpsi2, dV_dz, dV_dz2, dV_dpsi_dz, dV_dpsi3, dV_dpsi2_dz, dV_dpsi_dz2
 real*8     :: Omega, dOmega_dpsi, dOmega_dz, dOmega_dpsi2, dOmega_dz2, dOmega_dpsi_dz
 ! for REs
@@ -41,7 +40,9 @@ if (my_id .eq. 0) then
   write(*,*) '***************************************'
 endif
 
-if (my_id .eq. 0) then
+! --- This old projection method should be replaced by a direct solve on the elements
+! --- It is much cleaner and more generic
+if ( (my_id .eq. 0) .and. (n_order .le. 3) ) then
 
   do i=1,node_list%n_nodes
 
@@ -307,6 +308,8 @@ if (n_order .ge. 5) then
                  var_psi,var_rhon,1, ES%psi_axis,ES%psi_bnd,xpoint2,xcase2,ES%Z_xpoint,freeboundary_equil,refinement,1)
   endif
 endif
+
+
 
 if (tauIC .ne. 0.d0) then
   call Poisson(my_id,2,node_list,element_list,bnd_node_list,bnd_elm_list, &
