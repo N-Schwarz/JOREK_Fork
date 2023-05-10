@@ -449,7 +449,7 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp          n_adas, nimp_bg, local_radiation_bg,                                            &
 #endif
 #ifdef WITH_Refluid
-!$omp          Cre_intern, Cre_ext, Vlight, fact_ress			                       &
+!$omp          Cre_intern, Cre_ext, Vlight, fact_ress,			                       &
 #endif
 !$omp         atomnum_imp, Iconst_Ne, aconst_Ne, Iconst_Ar, aconst_Ar, Iconst_De, aconst_De, Iconst, aconst, max_eciter, max_pstariter, &
 #if (defined WITH_Neutrals) && (!defined WITH_Impurities)
