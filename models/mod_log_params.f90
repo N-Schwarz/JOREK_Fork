@@ -958,7 +958,6 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
      write(*,REAL_FMT) 're_gauss_fact       ',  re_gauss_fact
      write(*,REAL_FMT) 're_gauss_origin     ',  re_gauss_origin
      write(*,REAL_FMT) 're_gauss_width      ',  re_gauss_width
-     write(*,LOGI_FMT) 're_curv_drift       ',  re_curv_drift
      write(*,LOGI_FMT) 're_trit_seed        ',  re_trit_seed
      write(*,LOGI_FMT) 're_compt_seed       ',  re_compt_seed
      write(*,LOGI_FMT) 're_sec_source       ',  re_sec_source
