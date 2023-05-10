@@ -5,9 +5,9 @@ implicit none
 
 logical, parameter :: with_vpar       = .true.
 logical, parameter :: with_TiTe       = .false.
-logical, parameter :: with_neutrals   = .true. 
+logical, parameter :: with_neutrals   = .false. 
 logical, parameter :: with_impurities = .true.
-logical, parameter :: with_refluid    = .true. ! not yet possible to switch
+logical, parameter :: with_refluid    = .false. 
 
 
 ! ##################################################################################################
@@ -16,7 +16,7 @@ logical, parameter :: with_refluid    = .true. ! not yet possible to switch
 
 
 ! The following line is needed by ./util/config.sh:
-! #SETTINGS# with_vpar with_TiTe with_neutrals with_impurities
+! #SETTINGS# with_vpar with_TiTe with_neutrals with_impurities with_refluid
 
 integer, parameter :: jorek_model     = 600
 
