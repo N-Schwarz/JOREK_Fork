@@ -216,8 +216,9 @@ if ( (my_id .eq. 0) .and. (n_order .le. 3) ) then
         endif
       endif
     end if 
-if(with_impurities) then
-!================Impurity masss density, all charge states
+
+    if(with_impurities) then
+    !================Impurity masss density, all charge states
      select case ( trim(imp_type(index_main_imp)) )
        case('D2')
          m_i_over_m_imp = central_mass/2.  ! Deuterium mass = 2 u
@@ -237,8 +238,8 @@ if(with_impurities) then
     node_list%node(i)%values(1,4,var_rhoimp) = 0.d0
     
     node_list%node(i)%values(1,1,var_rho) = zn + node_list%node(i)%values(1,1,var_rhoimp)
-!================Impurity masss density
-endif ! with impurities
+    !================Impurity masss density
+    endif ! with impurities
 
     ! RE number density
     if (with_refluid) then
