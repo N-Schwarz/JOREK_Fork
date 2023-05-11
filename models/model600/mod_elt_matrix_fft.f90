@@ -244,7 +244,7 @@ real*8     :: hjk, hjk_De, d_hjkDe_dpstar, d_hjk_dpstar
 real*8	   :: nus0, nus1, nud0, nud1, phibr0, phibr1, tausync_inv
 real*8	   :: acoeff, bcoeff, ccoeff, dcoeff, Qfact, Rfact, Ddet, Ecrit, Ec_eff
 real*8     :: Ec_eff_old, funcval, derival
-integer*4  :: max_eciter, max_pstariter, neg_fail_count
+integer*4  :: max_eciter, max_pstariter, neg_fail_count, ii, jj
 real*8     :: pstar_old, funcpstar, derivpstar, nimp_j
 
 
@@ -5649,14 +5649,14 @@ implicit none
   ! Contribution from unionized and partially ionized impurity states
   if (with_impurities) then
     if ( trim(imp_type(index_main_imp)) .eq. 'Ne' .or. trim(imp_type(index_main_imp)) .eq. 'Ar') then
-      do j= 0, atomnum_imp - 1
+      do jj= 0, atomnum_imp - 1
        ! nimp_j is in SI units
-       nimp_j = central_density*1.d20 * m_i_over_m_imp * P_imp(j) * rimp0_corr
+       nimp_j = central_density*1.d20 * m_i_over_m_imp * P_imp(jj) * rimp0_corr
        
-       sum1 = sum1 + (nimp_j / ne_SI ) * float( atomnum_imp - j)
-       sum2 = sum2 + (nimp_j / ne_SI ) * float( atomnum_imp - j) * Iconst(j)
-       sum3 = sum3 + (nimp_j / ne_SI ) * float( atomnum_imp**2 - j**2)
-       sum4 = sum4 + (nimp_j / ne_SI ) * ( float( atomnum_imp**2 - j**2) * aconst(j) - (2.d0/3.d0)* (float(atomnum_imp - j))**2 )
+       sum1 = sum1 + (nimp_j / ne_SI ) * float( atomnum_imp - jj)
+       sum2 = sum2 + (nimp_j / ne_SI ) * float( atomnum_imp - jj) * Iconst(jj)
+       sum3 = sum3 + (nimp_j / ne_SI ) * float( atomnum_imp**2 - jj**2)
+       sum4 = sum4 + (nimp_j / ne_SI ) * ( float( atomnum_imp**2 - jj**2) * aconst(jj) - (2.d0/3.d0)* (float(atomnum_imp - jj))**2 )
        sum5 = sum5 + (nimp_j / ne_SI ) * float( atomnum_imp**2 )
       end do
     endif
@@ -5687,7 +5687,7 @@ implicit none
     else
        !write(*,*) 'Warning:: Determinant =',Ddet, 'So performing newton iterative solution.'
        Ec_eff_old = ne_total_si / ne_SI
-       do i=1, max_eciter
+       do ii=1, max_eciter
          funcval = Ec_eff_old - sqrt( -(dcoeff / Ec_eff_old) + 0.25d0 * bcoeff**2 - ccoeff )  + 0.5d0 * bcoeff
          derival = 1.d0 - 0.5d0 * dcoeff / (Ec_eff_old**2) * ( -(dcoeff / Ec_eff_old) + 0.25d0 * bcoeff**2 - ccoeff ) ** (-0.5d0)
          Ec_eff = Ec_eff_old - funcval / derival
@@ -5696,7 +5696,7 @@ implicit none
          else
             Ec_eff_old = Ec_eff
          endif
-         if (i .eq. max_eciter) then
+         if (ii .eq. max_eciter) then
             write(*,*) 'No convergence for Ec_eff with current Ec_eff, psi_norm = ', Ec_eff, psi_norm, 'so stopping'
             stop
          endif
@@ -5709,7 +5709,7 @@ implicit none
   ! To compute p* via newton iterations. This provides nus(p*) and nud(p*) that are needed to evaluate S_avalanche
   pstar_old = 1.d0
   neg_fail_count = 0
-  do i=1, max_pstariter
+  do ii=1, max_pstariter
     !Clogee = Clogc + log( sqrt(gamma_of_pstar - 1.d0) )
     !Clogei = Clogc + log( sqrt(2.d0) * pstar_old )  
     gamma_of_pstar = sqrt(1.d0 + pstar_old**2)
@@ -5733,15 +5733,15 @@ implicit none
    ! Contribution from unionized and partially ionized impurity states
    if (with_impurities) then
     if ( trim(imp_type(index_main_imp)) .eq. 'Ne' .or. trim(imp_type(index_main_imp)) .eq. 'Ar') then
-     do j= 0, atomnum_imp - 1
-       nimp_j = central_density*1.d20 * m_i_over_m_imp * P_imp(j) * rimp0_corr
-       hjk = ( pstar_old * sqrt(gamma_of_pstar-1.d0) * exp(Iconst(j)) ) **5.d0
-       sum6 = sum6 + (nimp_j / ne_SI ) * float( atomnum_imp - j) * (1.d0/5.d0) * log ( 1.d0 + hjk  )
-       d_hjk_dpstar = 5.d0 * ( pstar_old * sqrt(gamma_of_pstar-1.d0) * exp(Iconst(j)) ) **4.d0  * exp(Iconst(j)) * ( sqrt(gamma_of_pstar-1.d0) + pstar_old**2 / ( 2.d0 * gamma_of_pstar * sqrt(gamma_of_pstar-1.d0) ) )
-       sum6D = sum6D + ( nimp_j / ne_SI ) * float( atomnum_imp - j ) * (1.d0/5.d0) * 1.d0 / ( 1.d0 + hjk  ) * d_hjk_dpstar
-       paj32 = (pstar_old * exp(aconst(j)))**1.5d0
-       sum7 = sum7 + (nimp_j / ne_SI ) * (   2.d0/3.d0 * float( atomnum_imp**2 - j**2) * log ( paj32  + 1.d0 )  - 2.d0/3.d0 * (float(atomnum_imp - j))**2 * paj32 / (paj32 + 1.d0)  )
-       sum7D = sum7D + ( nimp_j / ne_SI ) * (   2.d0/3.d0 * float( atomnum_imp**2 - j**2) * 1.d0 / ( paj32  + 1.d0 ) * 3.d0/2.d0 * sqrt(pstar_old) * (exp(aconst(j)))**1.5d0  - 2.d0/3.d0 * (float(atomnum_imp - j))**2 * 3.d0/2.d0 / pstar_old * paj32 / (paj32 + 1.d0)**2.d0  )
+     do jj= 0, atomnum_imp - 1
+       nimp_j = central_density*1.d20 * m_i_over_m_imp * P_imp(jj) * rimp0_corr
+       hjk = ( pstar_old * sqrt(gamma_of_pstar-1.d0) * exp(Iconst(jj)) ) **5.d0
+       sum6 = sum6 + (nimp_j / ne_SI ) * float( atomnum_imp - jj) * (1.d0/5.d0) * log ( 1.d0 + hjk  )
+       d_hjk_dpstar = 5.d0 * ( pstar_old * sqrt(gamma_of_pstar-1.d0) * exp(Iconst(jj)) ) **4.d0  * exp(Iconst(jj)) * ( sqrt(gamma_of_pstar-1.d0) + pstar_old**2 / ( 2.d0 * gamma_of_pstar * sqrt(gamma_of_pstar-1.d0) ) )
+       sum6D = sum6D + ( nimp_j / ne_SI ) * float( atomnum_imp - jj ) * (1.d0/5.d0) * 1.d0 / ( 1.d0 + hjk  ) * d_hjk_dpstar
+       paj32 = (pstar_old * exp(aconst(jj)))**1.5d0
+       sum7 = sum7 + (nimp_j / ne_SI ) * (   2.d0/3.d0 * float( atomnum_imp**2 - jj**2) * log ( paj32  + 1.d0 )  - 2.d0/3.d0 * (float(atomnum_imp - jj))**2 * paj32 / (paj32 + 1.d0)  )
+       sum7D = sum7D + ( nimp_j / ne_SI ) * (   2.d0/3.d0 * float( atomnum_imp**2 - jj**2) * 1.d0 / ( paj32  + 1.d0 ) * 3.d0/2.d0 * sqrt(pstar_old) * (exp(aconst(jj)))**1.5d0  - 2.d0/3.d0 * (float(atomnum_imp - jj))**2 * 3.d0/2.d0 / pstar_old * paj32 / (paj32 + 1.d0)**2.d0  )
      end do
     endif
    endif
@@ -5808,7 +5808,7 @@ implicit none
        pstar_old = pstar
     endif
     
-    if (i .eq. max_pstariter) then
+    if (ii .eq. max_pstariter) then
        write(*,*) 'No convergence for pstar with current pstar, negfailcount = ', pstar, neg_fail_count, 'at (R,Z) = ',BigR, y_g(ms,mt)
        stop
     endif
@@ -5858,8 +5858,8 @@ implicit none
   !*********************************
   sigma_thomson = 8.d0 * PI / 3.d0 * EL_RAD**2
   S_compton = 0.d0
-  do i= 1, 1000  ! 0 is 0MeV, 1000 is 100MeV, step size is 0.1MeV
-        Egamma = float(i) * 0.1d0
+  do ii= 1, 1000  ! 0 is 0MeV, 1000 is 100MeV, step size is 0.1MeV
+        Egamma = float(ii) * 0.1d0
         zeee = ( log(Egamma) + 1.2d0 ) / 0.8d0
         gamma_spectrum =  4.44d17 * exp( - exp(-zeee) - zeee + 1.d0 )
         Egamma = Egamma * 1.d6 * EL_CHG
@@ -5873,7 +5873,7 @@ implicit none
        ! if (costheta_c .lt. 0.d0) write(*,*) 'sigma_compton = ', costheta_c, sigma_compton
 
         ! Integration by trapezoidal rule
-        if( (i .eq. 1) .or. (i .eq. 1000) ) then
+        if( (ii .eq. 1) .or. (ii .eq. 1000) ) then
           S_compton = S_compton + 0.5d0 * 0.1d0 * (gamma_spectrum * sigma_compton)
         else
           S_compton = S_compton + 0.5d0 * 0.1d0 * (2.d0 * gamma_spectrum * sigma_compton)
