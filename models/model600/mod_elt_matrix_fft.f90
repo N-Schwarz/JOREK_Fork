@@ -272,7 +272,8 @@ fact_retrit = 1.d0
 if (re_trit_seed .eq. .false.) fact_retrit = 0.d0
 
 Ppar0 = sqrt( gamma_rel**2 - 1.d0 )
-Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+
+Vlight  = vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 Vlight_adv = re_adv_fact * Vlight
 
 ! the variable implies ln(I_j^{-1})
