@@ -320,7 +320,7 @@ pure logical function ext_compatible(i_ext1, i_ext2)
   
   ! --- exceptions for compatibility
   if ( ( iext1 == i_ext_TiTe ) .and. ( iext2 == i_ext_refluid ) ) then
-    ext_compatible = .false. ! ### just an example
+    ext_compatible = .false. ! ###TODO: RE fluid adaptations for two temperatures still missing
   end if
   
 end function ext_compatible
