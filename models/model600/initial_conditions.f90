@@ -270,12 +270,7 @@ if ( (my_id .eq. 0) .and. (n_order .le. 3) ) then
               ! No initialization
               node_list%node(i)%values(1,:,var_nre) = 0.d0
            endif
-       
-     else
-        node_list%node(i)%values(1,1,var_nre) = 0.d0
-        node_list%node(i)%values(1,2,var_nre) = 0.d0 
-        node_list%node(i)%values(1,3,var_nre) = 0.d0
-        node_list%node(i)%values(1,4,var_nre) = 0.d0
+
     endif !refluid
     
     node_list%node(i)%deltas = 0.d0
