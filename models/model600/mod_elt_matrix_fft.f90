@@ -2150,10 +2150,14 @@ do i=1,n_vertex_max
 
             end if ! with_impurities
             
+
+            !###################################################################################################
+            !#  RE number density equation                                                                    #
+            !###################################################################################################
             
 	   if (with_refluid) then
            
-             rhs_ij(var_nre) =   v * BigR * zeta * delta_g(mp,9,ms,mt)                                                * xjac         &
+             rhs_ij(var_nre) =   v * BigR * zeta * delta_g(mp,var_nre,ms,mt)                                                * xjac         &
                              + v * BigR * ( fact_retrit*S_tritium + fact_recompt*S_compton + fact_ress*S_avalanche + S_reseed_artificial )                 * xjac * tstep &
                              + v * BigR * 2.d0 * nre0 * u0_y                                                       * xjac * tstep &
                              + v * BigR**2 * (nre0_x * u0_y - nre0_y * u0_x)                                       * xjac * tstep &
