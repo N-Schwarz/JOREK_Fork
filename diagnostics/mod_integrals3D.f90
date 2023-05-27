@@ -181,7 +181,7 @@ real*8  :: Vlight, nre0
 #endif
 
     ! For Ec_tot, Ec_eff and S_avalanche calculations
-    real*8     :: Ec_tot
+    real*8     :: Ec_tot, Z_eff_temp, Te_corr_eV_temp
     integer*4  :: atomnum_imp
     real*8, dimension(0:9) :: Iconst_Ne, aconst_Ne
     real*8, dimension(0:17) :: Iconst_Ar, aconst_Ar
@@ -490,7 +490,7 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp           ne_JOREK, P_imp, Lrad, E_ion, E_ion_bg, ion_i,                                 &
 !$omp           ion_k, Z_eff, Z_eff_imp, eta_coef, Ti_corr_eV,                                 &
 #endif
-!$omp           Ec_tot,  &
+!$omp           Ec_tot, Z_eff_temp, Te_corr_eV_temp, &
 !$omp           ne_total_si,                                                    &
 !$omp           Clog0, Clogc, Clogee, Clogei, dClogee_dpstar, dClogei_dpstar, gamma_of_pstar, beta_of_pstar, Epar0, nus, nud, nusprime, nudprime,&
 !$omp           nus0, nus1, nud0, nud1, phibr0, phibr1, tausync_inv,&
@@ -1043,19 +1043,23 @@ do ife = ife_min, ife_max
 
 #ifdef WITH_impurities
     ne_SI_re = ne_SI
+    Z_eff_temp = Z_eff
+    Te_corr_eV_temp = Te_corr_eV
 #else
     ne_SI_re = r0_corr * 1.d20 * central_density
-    Z_eff = 1.d0
+    Z_eff_temp = 1.d0
+    Te_corr_eV_temp = 0.5d0* T0_corr/(EL_CHG*MU_ZERO*central_density*1.d20)
 #endif
 
-  Clog0 = 14.9d0 - 0.5d0 * log( ne_SI_re * 1.d-20 ) + log( Te_corr_eV * 1.d-3 )
-  Clogc = 14.6d0 + 0.5d0 * log ( Te_corr_eV / (ne_SI_re * 1.d-20) )
+
+  Clog0 = 14.9d0 - 0.5d0 * log( ne_SI_re * 1.d-20 ) + log( Te_corr_eV_temp * 1.d-3 )
+  Clogc = 14.6d0 + 0.5d0 * log ( Te_corr_eV_temp / (ne_SI_re * 1.d-20) )
   Epar0 =  E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
   Ecrit = (ne_SI_re * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
-  if (with_impurities) then
+#ifdef WITH_impurities
     ne_total_si = ne_total_si + central_density*1.d20 * ( beta_imp * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
-  endif
+#endif
   Ec_tot = (ne_total_si * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
   
   ! Contribution from neutral deuterium
@@ -1084,7 +1088,7 @@ do ife = ife_min, ife_max
     ! Computing Ec_eff
     nus0 = 1.d0 + 1.d0/Clogc * (sum2 - sum1)
     nus1 = 0.5d0/Clogc * ( 1.d0 + 3.d0*sum1)
-    nud0 = 1.d0 + Z_eff + 1.d0/Clogc * sum4
+    nud0 = 1.d0 + Z_eff_temp + 1.d0/Clogc * sum4
     nud1 = 1.d0/Clogc * sum5
     phibr0 = 0.35d0 * ALPHA_FINE_STRUCTURE /  Clogc * sum5
     phibr1 = 0.2d0 * ALPHA_FINE_STRUCTURE /  Clogc * sum5
