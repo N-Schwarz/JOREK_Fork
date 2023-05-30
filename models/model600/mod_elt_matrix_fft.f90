@@ -265,11 +265,11 @@ real*8     :: Bgrad_nre_star,     Bgrad_nre, Bgrad_nre_k_star
 real*8     :: Bgrad_nre_star_psi, Bgrad_nre_psi, Bgrad_nre_nre, Bgrad_nre_nre_n
 
 fact_ress = 1.d0
-if (re_sec_source .eq. .false.) fact_ress = 0.d0
+if (re_sec_source .eqv. .false.) fact_ress = 0.d0
 fact_recompt = 1.d0
-if (re_compt_seed .eq. .false.) fact_recompt = 0.d0
+if (re_compt_seed .eqv. .false.) fact_recompt = 0.d0
 fact_retrit = 1.d0
-if (re_trit_seed .eq. .false.) fact_retrit = 0.d0
+if (re_trit_seed .eqv. .false.) fact_retrit = 0.d0
 
 Ppar0 = sqrt( gamma_rel**2 - 1.d0 )
 
@@ -5625,7 +5625,7 @@ subroutine compute_re_sources
 
 implicit none
 
-  if (with_impurities .eq. .false.) then
+  if (with_impurities .eqv. .false.) then
     ne_SI = r0_corr * 1.d20 * central_density
     Z_eff = 1.d0
   endif

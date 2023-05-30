@@ -701,7 +701,7 @@ endif
 #endif
 
 fact_ress = 1.d0
-if (re_sec_source .eq. .false.) fact_ress = 0.d0
+if (re_sec_source .eqv. .false.) fact_ress = 0.d0
 
 max_eciter = 40
 max_pstariter = 80   
