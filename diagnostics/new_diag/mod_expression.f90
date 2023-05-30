@@ -648,7 +648,7 @@ module mod_expression
 #endif
 
     ! For Ec_tot, Ec_eff and S_avalanche calculations
-    real*8     :: Ec_tot, ne_SI_re
+    real*8     :: Ec_tot, ne_SI_re, Z_eff_temp, Te_corr_eV_temp
     integer*4  :: atomnum_imp
     real*8, dimension(0:9) :: Iconst_Ne, aconst_Ne
     real*8, dimension(0:17) :: Iconst_Ar, aconst_Ar
@@ -1790,19 +1790,22 @@ max_pstariter = 80
 
 #ifdef WITH_impurities
     ne_SI_re = ne_SI
+    Z_eff_temp = Z_eff
+    Te_corr_eV_temp = Te_corr_eV
 #else
     ne_SI_re = r0_corr * 1.d20 * central_density
-    Z_eff = 1.d0
+    Z_eff_temp = 1.d0
+    Te_corr_eV_temp = Te0_corr/(EL_CHG*MU_ZERO*central_density*1.d20)  ! Te in eV
 #endif
  
-  Clog0 = 14.9d0 - 0.5d0 * log( ne_SI_re * 1.d-20 ) + log( Te_corr_eV * 1.d-3 )
-  Clogc = 14.6d0 + 0.5d0 * log ( Te_corr_eV / (ne_SI_re * 1.d-20) )
+  Clog0 = 14.9d0 - 0.5d0 * log( ne_SI_re * 1.d-20 ) + log( Te_corr_eV_temp * 1.d-3 )
+  Clogc = 14.6d0 + 0.5d0 * log ( Te_corr_eV_temp / (ne_SI_re * 1.d-20) )
   Epar0 = E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
   Ecrit = (ne_SI_re * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
-  if (with_impurities) then
+#ifdef WITH_impurities
     ne_total_si = ne_total_si + central_density*1.d20 * ( beta_imp * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
-  endif  
+#endif
   Ec_tot = (ne_total_si * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
   
   ! Contribution from neutral deuterium
@@ -1832,7 +1835,7 @@ max_pstariter = 80
     ! Computing Ec_eff
     nus0 = 1.d0 + 1.d0/Clogc * (sum2 - sum1)
     nus1 = 0.5d0/Clogc * ( 1.d0 + 3.d0*sum1)
-    nud0 = 1.d0 + Z_eff + 1.d0/Clogc * sum4
+    nud0 = 1.d0 + Z_eff_temp + 1.d0/Clogc * sum4
     nud1 = 1.d0/Clogc * sum5
     phibr0 = 0.35d0 * ALPHA_FINE_STRUCTURE /  Clogc * sum5
     phibr1 = 0.2d0 * ALPHA_FINE_STRUCTURE /  Clogc * sum5
@@ -1878,10 +1881,10 @@ max_pstariter = 80
     !Clogee = Clogc + log( sqrt(gamma_of_pstar - 1.d0) )
     !Clogei = Clogc + log( sqrt(2.d0) * pstar_old )  
     gamma_of_pstar = sqrt(1.d0 + pstar_old**2)
-    Clogee = Clog0 + 0.2d0 * log ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG)   )**2.5d0 )
-    dClogee_dpstar = 0.2d0 / ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG)   )**2.5d0 ) * 2.5d0 * ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG)   )**1.5d0  * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG) * pstar_old / gamma_of_pstar
-    Clogei = Clog0 + 0.2d0 * log ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV * EL_CHG)   )**5.d0 )
-    dClogei_dpstar = 0.2d0 / ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV * EL_CHG)   )**5.d0 )  *  (2.d0 * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG) ) ** 2.5d0  *  ( 5.d0 * pstar_old**4)
+    Clogee = Clog0 + 0.2d0 * log ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG)   )**2.5d0 )
+    dClogee_dpstar = 0.2d0 / ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG)   )**2.5d0 ) * 2.5d0 * ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG)   )**1.5d0  * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG) * pstar_old / gamma_of_pstar
+    Clogei = Clog0 + 0.2d0 * log ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV_temp * EL_CHG)   )**5.d0 )
+    dClogei_dpstar = 0.2d0 / ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV_temp * EL_CHG)   )**5.d0 )  *  (2.d0 * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG) ) ** 2.5d0  *  ( 5.d0 * pstar_old**4)
     beta_of_pstar = pstar_old**2 / (1.d0 + pstar_old**2)
     
     hjk_De = ( pstar_old * sqrt(gamma_of_pstar-1.d0) * exp(Iconst_De) ) **5.d0
@@ -1896,7 +1899,7 @@ max_pstariter = 80
     sum7 = ( central_density*1.d20 * rn0 / ne_SI_re ) * (   2.d0/3.d0 * float( 1**2 - 0**2) * log ( paj32_De  + 1.d0 )  - 2.d0/3.d0 * (float(1 - 0))**2 * paj32_De / (paj32_De + 1.d0)  )
     sum7D = central_density*1.d20 * rn0 / ne_SI_re  * (   2.d0/3.d0 * float( 1**2 - 0**2) * 1.d0 / ( paj32_De  + 1.d0 ) * 3.d0/2.d0 * sqrt(pstar_old) * (exp(aconst_De))**1.5d0  - 2.d0/3.d0 * (float(1 - 0))**2 * 3.d0/2.d0 / pstar_old * paj32_De / (paj32_De + 1.d0)**2.d0  )
    ! Contribution from unionized and partially ionized impurity states
-   if (with_impurities) then   
+#ifdef WITH_impurities
     if ( trim(imp_type(index_main_imp)) .eq. 'Ne' .or. trim(imp_type(index_main_imp)) .eq. 'Ar') then
      do j= 0, atomnum_imp - 1
        nimp_j = central_density*1.d20 * m_i_over_m_imp * P_imp(j) * rimp0_corr
@@ -1909,21 +1912,21 @@ max_pstariter = 80
        sum7D = sum7D + ( nimp_j / ne_SI_re ) * (   2.d0/3.d0 * float( atomnum_imp**2 - j**2) * 1.d0 / ( paj32  + 1.d0 ) * 3.d0/2.d0 * sqrt(pstar_old) * (exp(aconst(j)))**1.5d0  - 2.d0/3.d0 * (float(atomnum_imp - j))**2 * 3.d0/2.d0 / pstar_old * paj32 / (paj32 + 1.d0)**2.d0  )
      end do
     endif
-   endif
+#endif
 
     !nus = (1.d0/Clogc) * ( Clogee + sum1 * ( log (pstar_old* sqrt(gamma_of_pstar-1.d0)) - beta_of_pstar**2.d0 ) + sum2 )
-    !nud = (1.d0/Clogc) * ( Clogee + Clogei*Z_eff + sum3 *log(pstar_old) + sum4 )
+    !nud = (1.d0/Clogc) * ( Clogee + Clogei*Z_eff_temp + sum3 *log(pstar_old) + sum4 )
     !nusprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + sum1 * ( 1.d0/pstar_old + pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + 4.d0 * (pstar_old/(1.d0+pstar_old**2))**3 ) )
-    !nudprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + Z_eff/pstar_old  + sum3/pstar_old ) 
+    !nudprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + Z_eff_temp/pstar_old  + sum3/pstar_old ) 
         
     nus = (1.d0/Clogc) * ( Clogee - sum1 * beta_of_pstar**2.d0 + sum6 )
-    nud = (1.d0/Clogc) * ( Clogee + Clogei*Z_eff + sum7 )
+    nud = (1.d0/Clogc) * ( Clogee + Clogei*Z_eff_temp + sum7 )
 
     nusprime = (1.d0/Clogc) * ( dClogee_dpstar  - sum1 * 4.d0 * (pstar_old/(1.d0+pstar_old**2))**3 + sum6D  )
-    nudprime = (1.d0/Clogc) * ( dClogee_dpstar  + Z_eff * dClogei_dpstar + sum7D )
+    nudprime = (1.d0/Clogc) * ( dClogee_dpstar  + Z_eff_temp * dClogei_dpstar + sum7D )
 
     !nusprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + sum1 * 4.d0 * (pstar_old/(1.d0+pstar_old**2))**3 + sum6D  )
-    !nudprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + Z_eff/pstar_old + sum7D )
+    !nudprime = (1.d0/Clogc) * ( pstar_old/(2.d0*(gamma_of_pstar-1.d0) * gamma_of_pstar) + Z_eff_temp/pstar_old + sum7D )
     
     if( abs(Epar0) .ge. abs(Ec_eff) ) then
       funcpstar = sqrt(abs(Epar0)/Ecrit) * pstar_old - (nus * nud)**(0.25d0)
@@ -1979,7 +1982,7 @@ max_pstariter = 80
     
     if (i .eq. max_pstariter) then
        write(*,*) 'No convergence for pstar with current pstar, negfailcount = ', pstar, neg_fail_count, 'at (R,Z) = ',BigR, Z
-       !write(*,*) 'No convergence for pstar with current pstar, negfailcount = ', pstar, neg_fail_count, 'at (R,Z) = ',BigR, y_g(ms,mt), '(Clogc, s1,s2,s3,s4,Epar0, Ecrit, Zeff, nus,nud,nusp,nudp,f,d)=', Clogc, sum1, sum2, sum3, sum4, Epar0, Ecrit, Z_eff, nus, nud, nusprime, nudprime, funcpstar, derivpstar,'so stopping'
+       !write(*,*) 'No convergence for pstar with current pstar, negfailcount = ', pstar, neg_fail_count, 'at (R,Z) = ',BigR, y_g(ms,mt), '(Clogc, s1,s2,s3,s4,Epar0, Ecrit, Zeff, nus,nud,nusp,nudp,f,d)=', Clogc, sum1, sum2, sum3, sum4, Epar0, Ecrit, Z_eff_temp, nus, nud, nusprime, nudprime, funcpstar, derivpstar,'so stopping'
        stop
     endif
   end do  ! End of computing p*, nus(p*) and nud(p*)
@@ -1997,7 +2000,9 @@ max_pstariter = 80
 Ecrit  = Ecrit   * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_proton) ! Putting back to JOREK units
 Ec_tot = Ec_tot * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_proton) ! Putting back to JOREK units
 Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_proton) ! Putting back to JOREK units
-ne_SI = ne_SI / 1.d20 / central_density ! Put ne_SI back to JOREK units to have consistent fact_ne factor with other models (see below)
+#if (defined WITH_Neutrals) || (defined WITH_Impurities)
+  ne_SI = ne_SI / 1.d20 / central_density ! Put ne_SI back to JOREK units to have consistent fact_ne factor with other models (see below)
+#endif
 
           ! --- Factors for switching between JOREK normalized and SI units.
           if ( units == SI_UNITS ) then
