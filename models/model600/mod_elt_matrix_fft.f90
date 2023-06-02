@@ -2157,21 +2157,21 @@ do i=1,n_vertex_max
             
 	   if (with_refluid) then
            
-             rhs_ij(var_nre) =   v * BigR * zeta * delta_g(mp,var_nre,ms,mt)                                                * xjac         &
-                             + v * BigR * ( fact_retrit*S_tritium + fact_recompt*S_compton + fact_ress*S_avalanche + S_reseed_artificial )                 * xjac * tstep &
-                             + v * BigR * 2.d0 * nre0 * u0_y                                                       * xjac * tstep &
-                             + v * BigR**2 * (nre0_x * u0_y - nre0_y * u0_x)                                       * xjac * tstep &
-                             - v * Vlight_adv / F0 * ( BigR * ( nre0_x * ps0_y - nre0_y * ps0_x ) + nre0 * ps0_y ) * xjac * tstep &
-                             - v * Vlight_adv / F0 * ( F0 * nre0_p )                                               * xjac * tstep &
-                             - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star * Bgrad_nre                      * xjac * tstep &
-                       	     - Dre_prof * BigR  * (v_x * nre0_x + v_y * nre0_y                                             )          * xjac * tstep &
+             rhs_ij(var_nre) =   v * BigR * zeta * delta_g(mp,var_nre,ms,mt)                                       * xjac  * factor(var_nre,1)        &
+                             + v * BigR * ( fact_retrit*S_tritium * factor(var_nre,7) + fact_recompt*S_compton * factor(var_nre,8) + fact_ress*S_avalanche * factor(var_nre,9) + S_reseed_artificial )                 * xjac * tstep &
+                             + v * BigR * 2.d0 * nre0 * u0_y                                                       * xjac * tstep * factor(var_nre,2) &
+                             + v * BigR**2 * (nre0_x * u0_y - nre0_y * u0_x)                                       * xjac * tstep * factor(var_nre,2) &
+                             - v * Vlight_adv / F0 * ( BigR * ( nre0_x * ps0_y - nre0_y * ps0_x ) + nre0 * ps0_y ) * xjac * tstep * factor(var_nre,3) &
+                             - v * Vlight_adv / F0 * ( F0 * nre0_p )                                               * xjac * tstep * factor(var_nre,3) &
+                             - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star * Bgrad_nre                      * xjac * tstep * factor(var_nre,4) &
+                       	     - Dre_prof * BigR  * (v_x * nre0_x + v_y * nre0_y                                             )          * xjac * tstep * factor(var_nre,5)&
                              - Dre_perp_num * (v_xx + v_x/BigR + v_yy)*(nre0_xx + nre0_x/Bigr + nre0_yy) * BigR    * xjac * tstep &
                              - tgnum_nre * 0.5d0 * tstep * 0.5d0 * ( BigR**2 * (nre0_x * u0_y - nre0_y * u0_x) * ( v_x * u0_y - v_y * u0_x) + Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * ( v_x * ps0_y -  v_y * ps0_x                       ) &
-                                                                       ) * BigR * xjac * tstep
+                                                                       ) * BigR * xjac * tstep * factor(var_nre,6)
 
-             rhs_ij_k(var_nre) = - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_k_star * Bgrad_nre                      * xjac * tstep &
-                       	                - Dre_prof * BigR  * (                                                        v_p * nre0_p / BigR**2 )          * xjac * tstep   &
-                                        - tgnum_nre * 0.5d0 * tstep * 0.5d0 * (  Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * (                       F0 / BigR * v_p)    ) * BigR * xjac * tstep
+             rhs_ij_k(var_nre) = - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_k_star * Bgrad_nre                      * xjac * tstep * factor(var_nre,4) &
+                       	                - Dre_prof * BigR  * (                                                        v_p * nre0_p / BigR**2 )          * xjac * tstep * factor(var_nre,5)   &
+                                        - tgnum_nre * 0.5d0 * tstep * 0.5d0 * (  Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * (                       F0 / BigR * v_p)    ) * BigR * xjac * tstep * factor(var_nre,6)
 
            endif
             
