@@ -257,21 +257,17 @@ if (my_id .eq. 0) then
   call MPI_PACK(Dre_iso,                1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK(Dre_num,                1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK(impdens_init,           1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(Dcontrad,                                       1,MPI_LOGICAL,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
- 
+  call MPI_PACK(Dcontrad,                                       1,MPI_LOGICAL,buffer,bufsize,position,MPI_COMM_WORLD,ierr)  
+  
+  do i=1, 3
+    call MPI_PACK(imp_inj_flat(i)%density_rise,          1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
+    call MPI_PACK(imp_inj_flat(i)%rise_time,             1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
+    call MPI_PACK(imp_inj_flat(i)%start_time,            1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
+    call MPI_PACK(deut_inj_flat(i)%density_rise,         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
+    call MPI_PACK(deut_inj_flat(i)%rise_time,            1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
+    call MPI_PACK(deut_inj_flat(i)%start_time,           1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
+  end do
 
-  call MPI_PACK(impdens_1stinj,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr) 
-  call MPI_PACK(tstart_imp_1stinj,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(dt_imp_1stinj,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(impdens_2ndinj,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(tstart_imp_2ndinj,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(dt_imp_2ndinj,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(Deutdens_1stinj   ,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(tstart_Deut_1stinj,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(dt_Deut_1stinj    ,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(Deutdens_2ndinj   ,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(tstart_Deut_2ndinj,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(dt_Deut_2ndinj    ,                         1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
 
   call MPI_PACK(bcs%dirichlet%psi    , max_bnd_types,MPI_LOGICAL,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK(bcs%dirichlet%u      , max_bnd_types,MPI_LOGICAL,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
@@ -1073,18 +1069,14 @@ if (my_id .ne. 0) then
 
   call MPI_UNPACK(buffer,bufsize,position,Dcontrad,                                       1,MPI_LOGICAL,MPI_COMM_WORLD,ierr)
   
-  call MPI_UNPACK(buffer,bufsize,position,impdens_1stinj   ,       1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,tstart_imp_1stinj,       1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,dt_imp_1stinj    ,       1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,impdens_2ndinj   ,       1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,tstart_imp_2ndinj,       1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,dt_imp_2ndinj    ,       1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,Deutdens_1stinj   ,      1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,tstart_Deut_1stinj,      1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,dt_Deut_1stinj    ,      1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,Deutdens_2ndinj   ,      1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,tstart_Deut_2ndinj,      1,MPI_REAL8,MPI_COMM_WORLD,ierr)
-  call MPI_UNPACK(buffer,bufsize,position,dt_Deut_2ndinj    ,      1,MPI_REAL8,MPI_COMM_WORLD,ierr)
+  do i=1,3
+    call MPI_UNPACK(buffer,bufsize,position,imp_inj_flat(i)%density_rise,        1,MPI_REAL8,MPI_COMM_WORLD,ierr)
+    call MPI_UNPACK(buffer,bufsize,position,imp_inj_flat(i)%rise_time,           1,MPI_REAL8,MPI_COMM_WORLD,ierr)
+    call MPI_UNPACK(buffer,bufsize,position,imp_inj_flat(i)%start_time,          1,MPI_REAL8,MPI_COMM_WORLD,ierr)
+    call MPI_UNPACK(buffer,bufsize,position,Deut_inj_flat(i)%density_rise,       1,MPI_REAL8,MPI_COMM_WORLD,ierr)
+    call MPI_UNPACK(buffer,bufsize,position,Deut_inj_flat(i)%rise_time,          1,MPI_REAL8,MPI_COMM_WORLD,ierr)
+    call MPI_UNPACK(buffer,bufsize,position,Deut_inj_flat(i)%start_time,         1,MPI_REAL8,MPI_COMM_WORLD,ierr)
+  end do
 
   call MPI_UNPACK(buffer,bufsize,position,bcs%dirichlet%psi    , max_bnd_types,MPI_LOGICAL,MPI_COMM_WORLD,ierr)
   call MPI_UNPACK(buffer,bufsize,position,bcs%dirichlet%u      , max_bnd_types,MPI_LOGICAL,MPI_COMM_WORLD,ierr)

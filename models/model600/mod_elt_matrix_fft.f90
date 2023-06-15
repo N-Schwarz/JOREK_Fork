@@ -248,6 +248,8 @@ integer*4  :: max_eciter, max_pstariter, neg_fail_count, ii, jj
 real*8     :: pstar_old, funcpstar, derivpstar, nimp_j
 
 
+integer*4  :: iflat
+
 ! Matrix and RHS variables
 !real*8     :: ij9, kl9, ij10, kl10
 !real*8     :: rhs_ij_9, rhs_ij_9_k, rhs_ij_10, rhs_ij_10_k
@@ -1520,30 +1522,18 @@ do i=1,n_vertex_max
            !# For uniform 1st and 2nd injection of Impurities or Deuterium ions
            !####################################################################
            
+           do iflat=1,3
            ! Impurity source that increases linearly in time from 0 to , is activated over a time window of dt_imp_1stinj
-           if ( with_impurities .and. ( t_now .gt. tstart_imp_1stinj ) .and. ( t_now .lt. (tstart_imp_1stinj + dt_imp_1stinj) )  )  then
-               source_imp = impdens_1stinj / (central_density*1.d20 * m_i_over_m_imp) 
-               source_imp = source_imp / dt_imp_1stinj
-           endif
-           
-           ! Impurity 2nd injection source that increases linearly in time from 0 to , is activated over a time window of dt_imp_2nd_inj 
-           if ( with_impurities .and. ( t_now .gt. tstart_imp_2ndinj ) .and. ( t_now .lt. (tstart_imp_2ndinj + dt_imp_2ndinj) )  )  then
-               source_imp = impdens_2ndinj / (central_density*1.d20 * m_i_over_m_imp) 
-               source_imp = source_imp / dt_imp_2ndinj
-           endif
-           
+             if ( with_impurities .and. ( t_now .gt. imp_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (imp_inj_flat(iflat)%start_time + imp_inj_flat(iflat)%rise_time) )  )  then
+               source_imp = imp_inj_flat(iflat)%density_rise / (central_density*1.d20 * m_i_over_m_imp) 
+               source_imp = source_imp / imp_inj_flat(iflat)%rise_time
+             endif
            ! Deuterium density source that increases linearly in time from 0 to , is activated over a time window of 106JU (~ 0.7ms)
-           if ( ( t_now .gt. tstart_Deut_1stinj ) .and. ( t_now .lt. (tstart_Deut_1stinj + dt_Deut_1stinj) )  )  then
-               particle_source(ms,mt) = Deutdens_1stinj / (central_density*1.d20 ) 
-               particle_source(ms,mt) = particle_source(ms,mt) / dt_Deut_1stinj
-           endif
-           
-           ! Deuterium density 2nd injection source that increases linearly in time from 0 to , is activated over a time window of dt_Deut_2nd_inj
-           if ( ( t_now .gt. tstart_Deut_2ndinj ) .and. ( t_now .lt. (tstart_Deut_2ndinj + dt_Deut_2ndinj) )  )  then
-               particle_source(ms,mt) = Deutdens_2ndinj / (central_density*1.d20 ) 
-               particle_source(ms,mt) = particle_source(ms,mt) / dt_Deut_2ndinj
-           endif
-           ! End of uniform 1st and 2nd injections
+             if ( ( t_now .gt. deut_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (deut_inj_flat(iflat)%start_time + deut_inj_flat(iflat)%rise_time) )  )  then
+               particle_source(ms,mt) = deut_inj_flat(iflat)%density_rise  / (central_density*1.d20 )
+               particle_source(ms,mt) = particle_source(ms,mt) / deut_inj_flat(iflat)%rise_time
+             endif
+           end do
 
             v_ps0_x  = v_xx  * ps0_y - v_xy  * ps0_x + v_x  * ps0_xy - v_y * ps0_xx
             v_ps0_y  = v_xy  * ps0_y - v_yy  * ps0_x + v_x  * ps0_yy - v_y * ps0_xy

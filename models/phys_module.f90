@@ -318,19 +318,9 @@ module phys_module
   logical :: Dcontrad  			  !< Deuterium continuous radiation .t. or .f.
   
   real*8  :: impdens_init
-  real*8  :: impdens_1stinj
-  real*8  :: tstart_imp_1stinj
-  real*8  :: dt_imp_1stinj
-  real*8  :: impdens_2ndinj
-  real*8  :: tstart_imp_2ndinj
-  real*8  :: dt_imp_2ndinj
 
-  real*8  :: Deutdens_1stinj
-  real*8  :: tstart_Deut_1stinj
-  real*8  :: dt_Deut_1stinj
-  real*8  :: Deutdens_2ndinj
-  real*8  :: tstart_Deut_2ndinj
-  real*8  :: dt_Deut_2ndinj
+
+  type (flat_injection) :: imp_inj_flat(1:3), deut_inj_flat(1:3)
 
 
   !> @name Timestepping parameters
