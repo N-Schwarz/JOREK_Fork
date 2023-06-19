@@ -50,7 +50,7 @@ integer    :: i, j, ms, mt, mp, k, l, index_ij, index_kl, index, index_k, index_
 integer    :: n_tor_start, n_tor_end, n_tor_local, n_tor_loop
 integer    :: in, im, ij1, ij2, ij3, ij4, ij5, ij6, ij7, ij8, kl1, kl2, kl3, kl4, kl5, kl6, kl7, kl8, ij, kl
 real*8     :: wst, xjac, xjac_s, xjac_t, xjac_x, xjac_y, BigR, r2, phi, delta_phi
-real*8     :: current_source(n_gauss,n_gauss),particle_source(n_gauss,n_gauss),heat_source(n_gauss,n_gauss),heat_source_i(n_gauss,n_gauss),heat_source_e(n_gauss,n_gauss)
+real*8     :: current_source(n_gauss,n_gauss),particle_source(n_gauss,n_gauss),heat_source(n_gauss,n_gauss),heat_source_i(n_gauss,n_gauss),heat_source_e(n_gauss,n_gauss), particle_source_flat(n_gauss,n_gauss)
 real*8     :: R_axis, Z_axis, psi_axis, psi_bnd, R_xpoint(2), Z_xpoint(2), dj_dpsi, dj_dz, source_pellet, source_volume
 real*8     :: Bgrad_rho_star,     Bgrad_rho,     Bgrad_T_star,  Bgrad_Ti, Bgrad_Te, Bgrad_T, BB2
 real*8     :: Bgrad_rho_star_psi, Bgrad_rho_psi, Bgrad_rho_rho, Bgrad_T_star_psi, Bgrad_Ti_psi, Bgrad_T_psi, Bgrad_Ti_Ti, Bgrad_Te_psi, Bgrad_T_T, Bgrad_Te_Te, BB2_psi
@@ -124,7 +124,7 @@ integer    :: i_inj
 real*8     :: source_neutral, source_neutral_arr(n_inj_max)
 real*8     :: source_neutral_drift, source_neutral_drift_arr(n_inj_max) ! Neutral source deposited at R+drift_distance to impose plasmoid drift
 real*8     :: power_dens_teleport_ju, power_dens_teleport_ju_arr(n_inj_max) ! Teleported power density in JOREK unit (sink at R and source at R+drift)
-real*8     :: source_imp, source_imp_arr(n_inj_max)
+real*8     :: source_imp, source_imp_arr(n_inj_max), source_imp_flat
 real*8     :: source_bg, source_bg_arr(n_inj_max)
 
 ! time normalisation
@@ -1458,6 +1458,28 @@ do i=1,n_vertex_max
           tau_sc = 0.d0
           if (use_sc) call calculate_sc_quantities()
           
+            
+           !####################################################################
+           !# For uniform 1st and 2nd injection of Impurities or Deuterium ions
+           !####################################################################
+           
+           source_imp_flat = 0.d0
+           particle_source_flat(ms,mt) = 0.d0
+           do iflat=1,3
+           ! Impurity source that increases linearly in time from 0 to , is activated over a time window of dt_imp_1stinj
+             if ( with_impurities .and. ( t_now .gt. imp_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (imp_inj_flat(iflat)%start_time + imp_inj_flat(iflat)%rise_time) )  )  then
+               source_imp_flat = imp_inj_flat(iflat)%density_rise / (central_density*1.d20 * m_i_over_m_imp) 
+               source_imp_flat = source_imp_flat / imp_inj_flat(iflat)%rise_time
+             endif
+           ! Deuterium density source that increases linearly in time from 0 to , is activated over a time window of 106JU (~ 0.7ms)
+             if ( ( t_now .gt. deut_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (deut_inj_flat(iflat)%start_time + deut_inj_flat(iflat)%rise_time) )  )  then
+               particle_source_flat(ms,mt) = deut_inj_flat(iflat)%density_rise  / (central_density*1.d20 )
+               particle_source_flat(ms,mt) = particle_source_flat(ms,mt) / deut_inj_flat(iflat)%rise_time
+             endif
+           end do
+           source_imp = source_imp + source_imp_flat
+           particle_source(ms,mt) = particle_source(ms,mt) + particle_source_flat(ms,mt)
+
 
   BB2 = (F0*F0 + ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2 
  
@@ -1517,23 +1539,7 @@ do i=1,n_vertex_max
 
             !BB2              = (F0*F0 + ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2
             Btheta2          = (ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2
-            
-           !####################################################################
-           !# For uniform 1st and 2nd injection of Impurities or Deuterium ions
-           !####################################################################
-           
-           do iflat=1,3
-           ! Impurity source that increases linearly in time from 0 to , is activated over a time window of dt_imp_1stinj
-             if ( with_impurities .and. ( t_now .gt. imp_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (imp_inj_flat(iflat)%start_time + imp_inj_flat(iflat)%rise_time) )  )  then
-               source_imp = imp_inj_flat(iflat)%density_rise / (central_density*1.d20 * m_i_over_m_imp) 
-               source_imp = source_imp / imp_inj_flat(iflat)%rise_time
-             endif
-           ! Deuterium density source that increases linearly in time from 0 to , is activated over a time window of 106JU (~ 0.7ms)
-             if ( ( t_now .gt. deut_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (deut_inj_flat(iflat)%start_time + deut_inj_flat(iflat)%rise_time) )  )  then
-               particle_source(ms,mt) = deut_inj_flat(iflat)%density_rise  / (central_density*1.d20 )
-               particle_source(ms,mt) = particle_source(ms,mt) / deut_inj_flat(iflat)%rise_time
-             endif
-           end do
+
 
             v_ps0_x  = v_xx  * ps0_y - v_xy  * ps0_x + v_x  * ps0_xy - v_y * ps0_xx
             v_ps0_y  = v_xy  * ps0_y - v_yy  * ps0_x + v_x  * ps0_yy - v_y * ps0_xy
