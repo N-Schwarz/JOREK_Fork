@@ -1053,6 +1053,8 @@ do ife = ife_min, ife_max
 
 
   !Clog0 = 14.9d0 - 0.5d0 * log( ne_SI_re * 1.d-20 ) + log( Te_corr_eV_temp * 1.d-3 )
+  Clog0 = 14.9d0 - 0.5d0 * log( ne_SI_re * 1.d-20 )
+  Clog0 = Clog0 + log( Te_corr_eV_temp * 1.d-3 )
   Clogc = 14.6d0 + 0.5d0 * log ( Te_corr_eV_temp / (ne_SI_re * 1.d-20) )
   Epar0 =  E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
   Ecrit = (ne_SI_re * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
