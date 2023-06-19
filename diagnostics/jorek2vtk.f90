@@ -1,6 +1,7 @@
 !> Program to convert a JOREK2 restart file into binary VTK format
 program jorek2vtk
 
+use constants
 use mod_parameters, only: n_var, variable_names
 use data_structure
 use phys_module
@@ -113,6 +114,7 @@ integer               :: i_psin, i_test, iimp(6), i_ne, ineu(7), ibg_tot, i_pell
 integer               :: i_full(11), i_vec_B, i_vec_V, i_vec_E, i_vec_Jpol
 integer, allocatable  :: iibg(:), iproj(:)
 character*36          :: imp_label, proj_label
+real*8                :: Vlight
 
 
 #ifdef WITH_Impurities
@@ -218,6 +220,9 @@ if (use_imp_adas .and. (nimp_bg(1) > 0.d0)) then
   include_radiation = .true.
 endif
 #endif
+
+Vlight  = vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+
 
 ! --- Read parameters from namelist file 'vtk.nml' if it exists
 open(42, file='vtk.nml', action='read', status='old', iostat=ierr)
@@ -1278,8 +1283,12 @@ enddo  ! n_elements
       scalars(i,ineu(3)) = LradDcont_T * scalars(i,var_rho)**2.d0
 #ifdef fullmhd
       scalars(i,ineu(4)) = 0.d0   ! NEEDS BE CALCULATED FOR FULL MHD ELESEWHERE! 
-#else /* not fullmhd */ 
-      scalars(i,ineu(4)) = (2/(3 * BigR**2)) * eta_Sp * scalars(i,var_zj)**2.d0
+#else /* not fullmhd */
+#ifdef WITH_Refluid
+      scalars(i,ineu(4)) = (2/(3 * BigR**2)) * eta_Sp * ( scalars(i,var_zj) - Vlight * F0 / (Btot*BigR) * scalars(i,var_nre) )**2.d0
+#else
+      scalars(i,ineu(4)) = (2/(3 * BigR**2)) * eta_Sp * scalars(i,var_zj) **2.d0
+#endif
 #endif
 #endif /* with neutrals */
       
@@ -1466,7 +1475,11 @@ enddo  ! n_elements
      end do
      scalars(i,iimp(1)) = (2./3.) * scalars(i,var_rhoimp) * E_ion
      scalars(i,iimp(2)) = (r0_corr+beta_imp*rimp0_corr) * rimp0_corr * Lrad
-     scalars(i,iimp(3)) = (2./(3. * BigR**2)) * eta_Sp * scalars(i,var_zj)**2.d0
+#ifdef WITH_Refluid
+     scalars(i,iimp(3)) = (2./(3. * BigR**2)) * eta_Sp * ( scalars(i,var_zj) - Vlight * F0 / (Btot*BigR) * scalars(i,var_nre) )**2.d0
+#else
+     scalars(i,iimp(3)) = (2./(3. * BigR**2)) * eta_Sp * scalars(i,var_zj) **2.d0
+#endif
      scalars(i,iimp(4)) = Z_imp
      scalars(i,iimp(5)) = Z_eff
      scalars(i,iimp(6)) = beta_imp
@@ -1601,7 +1614,7 @@ if (SI_units) then
 #endif
 
 #ifdef WITH_Refluid
-    !===================================== RE density in 1e17m-3
+    !===================================== RE density in m-3
     scalars(i,var_nre) = scalars(i,var_nre) * sqrt(rho_norm / MU_zero) / EL_CHG / BigR 
 #endif
 
@@ -1675,8 +1688,11 @@ if (SI_units) then
       scalars(i,ineu(2)) = scalars(i,var_rho)* 1.d20 * scalars(i,var_rhon) * 1.d20 * LradDrays_T/ coef_rad_1
 
       scalars(i,ineu(3)) = LradDcont_T * (scalars(i,var_rho)*1.d20)**2.d0 / coef_rad_1
-
-      scalars(i,ineu(4)) = eta_Sp * (1.d6*scalars(i,var_zj))**2.d0
+#ifdef WITH_Refluid
+      scalars(i,ineu(4)) = eta_Sp * (1.d6* (scalars(i,var_zj) + vpar_re_sign * SPEED_OF_LIGHT * EL_CHG * scalars(i,var_nre) * 1.d-6 ) )**2.d0
+#else
+      scalars(i,ineu(4)) = eta_Sp * (1.d6* scalars(i,var_zj))**2.d0
+#endif
 #endif /* WITH_Neutrals but not WITH_Impurities */
       !--------------------------------------------------------
       ! --- Radiation from background impurity
