@@ -50,7 +50,7 @@ integer    :: i, j, ms, mt, mp, k, l, index_ij, index_kl, index, index_k, index_
 integer    :: n_tor_start, n_tor_end, n_tor_local, n_tor_loop
 integer    :: in, im, ij1, ij2, ij3, ij4, ij5, ij6, ij7, ij8, kl1, kl2, kl3, kl4, kl5, kl6, kl7, kl8, ij, kl
 real*8     :: wst, xjac, xjac_s, xjac_t, xjac_x, xjac_y, BigR, r2, phi, delta_phi
-real*8     :: current_source(n_gauss,n_gauss),particle_source(n_gauss,n_gauss),heat_source(n_gauss,n_gauss),heat_source_i(n_gauss,n_gauss),heat_source_e(n_gauss,n_gauss)
+real*8     :: current_source(n_gauss,n_gauss),particle_source(n_gauss,n_gauss),heat_source(n_gauss,n_gauss),heat_source_i(n_gauss,n_gauss),heat_source_e(n_gauss,n_gauss), particle_source_flat(n_gauss,n_gauss)
 real*8     :: R_axis, Z_axis, psi_axis, psi_bnd, R_xpoint(2), Z_xpoint(2), dj_dpsi, dj_dz, source_pellet, source_volume
 real*8     :: Bgrad_rho_star,     Bgrad_rho,     Bgrad_T_star,  Bgrad_Ti, Bgrad_Te, Bgrad_T, BB2
 real*8     :: Bgrad_rho_star_psi, Bgrad_rho_psi, Bgrad_rho_rho, Bgrad_T_star_psi, Bgrad_Ti_psi, Bgrad_T_psi, Bgrad_Ti_Ti, Bgrad_Te_psi, Bgrad_T_T, Bgrad_Te_Te, BB2_psi
@@ -124,7 +124,7 @@ integer    :: i_inj
 real*8     :: source_neutral, source_neutral_arr(n_inj_max)
 real*8     :: source_neutral_drift, source_neutral_drift_arr(n_inj_max) ! Neutral source deposited at R+drift_distance to impose plasmoid drift
 real*8     :: power_dens_teleport_ju, power_dens_teleport_ju_arr(n_inj_max) ! Teleported power density in JOREK unit (sink at R and source at R+drift)
-real*8     :: source_imp, source_imp_arr(n_inj_max)
+real*8     :: source_imp, source_imp_arr(n_inj_max), source_imp_flat
 real*8     :: source_bg, source_bg_arr(n_inj_max)
 
 ! time normalisation
@@ -248,6 +248,8 @@ integer*4  :: max_eciter, max_pstariter, neg_fail_count, ii, jj
 real*8     :: pstar_old, funcpstar, derivpstar, nimp_j
 
 
+integer*4  :: iflat
+
 ! Matrix and RHS variables
 !real*8     :: ij9, kl9, ij10, kl10
 !real*8     :: rhs_ij_9, rhs_ij_9_k, rhs_ij_10, rhs_ij_10_k
@@ -265,11 +267,11 @@ real*8     :: Bgrad_nre_star,     Bgrad_nre, Bgrad_nre_k_star
 real*8     :: Bgrad_nre_star_psi, Bgrad_nre_psi, Bgrad_nre_nre, Bgrad_nre_nre_n
 
 fact_ress = 1.d0
-if (re_sec_source .eq. .false.) fact_ress = 0.d0
+if (re_sec_source .eqv. .false.) fact_ress = 0.d0
 fact_recompt = 1.d0
-if (re_compt_seed .eq. .false.) fact_recompt = 0.d0
+if (re_compt_seed .eqv. .false.) fact_recompt = 0.d0
 fact_retrit = 1.d0
-if (re_trit_seed .eq. .false.) fact_retrit = 0.d0
+if (re_trit_seed .eqv. .false.) fact_retrit = 0.d0
 
 Ppar0 = sqrt( gamma_rel**2 - 1.d0 )
 
@@ -1456,6 +1458,28 @@ do i=1,n_vertex_max
           tau_sc = 0.d0
           if (use_sc) call calculate_sc_quantities()
           
+            
+           !####################################################################
+           !# For uniform 1st and 2nd injection of Impurities or Deuterium ions
+           !####################################################################
+           
+           source_imp_flat = 0.d0
+           particle_source_flat(ms,mt) = 0.d0
+           do iflat=1,3
+           ! Impurity source that increases linearly in time from 0 to , is activated over a time window of dt_imp_1stinj
+             if ( with_impurities .and. ( t_now .gt. imp_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (imp_inj_flat(iflat)%start_time + imp_inj_flat(iflat)%rise_time) )  )  then
+               source_imp_flat = imp_inj_flat(iflat)%density_rise / (central_density*1.d20 * m_i_over_m_imp) 
+               source_imp_flat = source_imp_flat / imp_inj_flat(iflat)%rise_time
+             endif
+           ! Deuterium density source that increases linearly in time from 0 to , is activated over a time window of 106JU (~ 0.7ms)
+             if ( ( t_now .gt. deut_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (deut_inj_flat(iflat)%start_time + deut_inj_flat(iflat)%rise_time) )  )  then
+               particle_source_flat(ms,mt) = deut_inj_flat(iflat)%density_rise  / (central_density*1.d20 )
+               particle_source_flat(ms,mt) = particle_source_flat(ms,mt) / deut_inj_flat(iflat)%rise_time
+             endif
+           end do
+           source_imp = source_imp + source_imp_flat
+           particle_source(ms,mt) = particle_source(ms,mt) + particle_source_flat(ms,mt)
+
 
   BB2 = (F0*F0 + ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2 
  
@@ -1515,35 +1539,7 @@ do i=1,n_vertex_max
 
             !BB2              = (F0*F0 + ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2
             Btheta2          = (ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2
-            
-           !####################################################################
-           !# For uniform 1st and 2nd injection of Impurities or Deuterium ions
-           !####################################################################
-           
-           ! Impurity source that increases linearly in time from 0 to , is activated over a time window of dt_imp_1stinj
-           if ( with_impurities .and. ( t_now .gt. tstart_imp_1stinj ) .and. ( t_now .lt. (tstart_imp_1stinj + dt_imp_1stinj) )  )  then
-               source_imp = impdens_1stinj / (central_density*1.d20 * m_i_over_m_imp) 
-               source_imp = source_imp / dt_imp_1stinj
-           endif
-           
-           ! Impurity 2nd injection source that increases linearly in time from 0 to , is activated over a time window of dt_imp_2nd_inj 
-           if ( with_impurities .and. ( t_now .gt. tstart_imp_2ndinj ) .and. ( t_now .lt. (tstart_imp_2ndinj + dt_imp_2ndinj) )  )  then
-               source_imp = impdens_2ndinj / (central_density*1.d20 * m_i_over_m_imp) 
-               source_imp = source_imp / dt_imp_2ndinj
-           endif
-           
-           ! Deuterium density source that increases linearly in time from 0 to , is activated over a time window of 106JU (~ 0.7ms)
-           if ( ( t_now .gt. tstart_Deut_1stinj ) .and. ( t_now .lt. (tstart_Deut_1stinj + dt_Deut_1stinj) )  )  then
-               particle_source(ms,mt) = Deutdens_1stinj / (central_density*1.d20 ) 
-               particle_source(ms,mt) = particle_source(ms,mt) / dt_Deut_1stinj
-           endif
-           
-           ! Deuterium density 2nd injection source that increases linearly in time from 0 to , is activated over a time window of dt_Deut_2nd_inj
-           if ( ( t_now .gt. tstart_Deut_2ndinj ) .and. ( t_now .lt. (tstart_Deut_2ndinj + dt_Deut_2ndinj) )  )  then
-               particle_source(ms,mt) = Deutdens_2ndinj / (central_density*1.d20 ) 
-               particle_source(ms,mt) = particle_source(ms,mt) / dt_Deut_2ndinj
-           endif
-           ! End of uniform 1st and 2nd injections
+
 
             v_ps0_x  = v_xx  * ps0_y - v_xy  * ps0_x + v_x  * ps0_xy - v_y * ps0_xx
             v_ps0_y  = v_xy  * ps0_y - v_yy  * ps0_x + v_x  * ps0_yy - v_y * ps0_xy
@@ -2157,21 +2153,21 @@ do i=1,n_vertex_max
             
 	   if (with_refluid) then
            
-             rhs_ij(var_nre) =   v * BigR * zeta * delta_g(mp,var_nre,ms,mt)                                                * xjac         &
-                             + v * BigR * ( fact_retrit*S_tritium + fact_recompt*S_compton + fact_ress*S_avalanche + S_reseed_artificial )                 * xjac * tstep &
-                             + v * BigR * 2.d0 * nre0 * u0_y                                                       * xjac * tstep &
-                             + v * BigR**2 * (nre0_x * u0_y - nre0_y * u0_x)                                       * xjac * tstep &
-                             - v * Vlight_adv / F0 * ( BigR * ( nre0_x * ps0_y - nre0_y * ps0_x ) + nre0 * ps0_y ) * xjac * tstep &
-                             - v * Vlight_adv / F0 * ( F0 * nre0_p )                                               * xjac * tstep &
-                             - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star * Bgrad_nre                      * xjac * tstep &
-                       	     - Dre_prof * BigR  * (v_x * nre0_x + v_y * nre0_y                                             )          * xjac * tstep &
+             rhs_ij(var_nre) =   v * BigR * zeta * delta_g(mp,var_nre,ms,mt)                                       * xjac  * factor(var_nre,1)        &
+                             + v * BigR * ( fact_retrit*S_tritium * factor(var_nre,7) + fact_recompt*S_compton * factor(var_nre,8) + fact_ress*S_avalanche * factor(var_nre,9) + S_reseed_artificial )                 * xjac * tstep &
+                             + v * BigR * 2.d0 * nre0 * u0_y                                                       * xjac * tstep * factor(var_nre,2) &
+                             + v * BigR**2 * (nre0_x * u0_y - nre0_y * u0_x)                                       * xjac * tstep * factor(var_nre,2) &
+                             - v * Vlight_adv / F0 * ( BigR * ( nre0_x * ps0_y - nre0_y * ps0_x ) + nre0 * ps0_y ) * xjac * tstep * factor(var_nre,3) &
+                             - v * Vlight_adv / F0 * ( F0 * nre0_p )                                               * xjac * tstep * factor(var_nre,3) &
+                             - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_star * Bgrad_nre                      * xjac * tstep * factor(var_nre,4) &
+                       	     - Dre_prof * BigR  * (v_x * nre0_x + v_y * nre0_y                                             )          * xjac * tstep * factor(var_nre,5)&
                              - Dre_perp_num * (v_xx + v_x/BigR + v_yy)*(nre0_xx + nre0_x/Bigr + nre0_yy) * BigR    * xjac * tstep &
                              - tgnum_nre * 0.5d0 * tstep * 0.5d0 * ( BigR**2 * (nre0_x * u0_y - nre0_y * u0_x) * ( v_x * u0_y - v_y * u0_x) + Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * ( v_x * ps0_y -  v_y * ps0_x                       ) &
-                                                                       ) * BigR * xjac * tstep
+                                                                       ) * BigR * xjac * tstep * factor(var_nre,6)
 
-             rhs_ij_k(var_nre) = - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_k_star * Bgrad_nre                      * xjac * tstep &
-                       	                - Dre_prof * BigR  * (                                                        v_p * nre0_p / BigR**2 )          * xjac * tstep   &
-                                        - tgnum_nre * 0.5d0 * tstep * 0.5d0 * (  Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * (                       F0 / BigR * v_p)    ) * BigR * xjac * tstep
+             rhs_ij_k(var_nre) = - (Dre_par - Dre_prof) * BigR / BB2 * Bgrad_nre_k_star * Bgrad_nre                      * xjac * tstep * factor(var_nre,4) &
+                       	                - Dre_prof * BigR  * (                                                        v_p * nre0_p / BigR**2 )          * xjac * tstep * factor(var_nre,5)   &
+                                        - tgnum_nre * 0.5d0 * tstep * 0.5d0 * (  Vlight_adv**2 / BB2 * 1.d0/BigR**2 * (nre0_x * ps0_y - nre0_y * ps0_x + F0 / BigR * nre0_p) * (                       F0 / BigR * v_p)    ) * BigR * xjac * tstep * factor(var_nre,6)
 
            endif
             
@@ -5625,7 +5621,7 @@ subroutine compute_re_sources
 
 implicit none
 
-  if (with_impurities .eq. .false.) then
+  if (with_impurities .eqv. .false.) then
     ne_SI = r0_corr * 1.d20 * central_density
     Z_eff = 1.d0
   endif

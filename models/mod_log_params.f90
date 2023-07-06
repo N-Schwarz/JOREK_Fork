@@ -933,21 +933,24 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
 #endif
 
      write(*,LOGI_FMT) 'Dcontrad            ',  Dcontrad
-     write(*,REAL_FMT) 'Deutdens_1stinj   ', Deutdens_1stinj    
-     write(*,REAL_FMT) 'tstart_Deut_1stinj', tstart_Deut_1stinj 
-     write(*,REAL_FMT) 'dt_Deut_1stinj    ', dt_Deut_1stinj     
-     write(*,REAL_FMT) 'Deutdens_2ndinj   ', Deutdens_2ndinj    
-     write(*,REAL_FMT) 'tstart_Deut_2ndinj', tstart_Deut_2ndinj 
-     write(*,REAL_FMT) 'dt_Deut_2ndinj    ', dt_Deut_2ndinj 
+     
+    write(*,REAL_FMT,advance='no') 'deut_inj_flat      '
+    do i = 1, 3
+      write(*,'(10ES12.4)',advance='no') deut_inj_flat(i)%density_rise
+      write(*,'(10ES12.4)',advance='no') deut_inj_flat(i)%rise_time
+      write(*,'(10ES12.4)',advance='no') deut_inj_flat(i)%start_time
+    end do
+    write(*,*)
 
 #if (defined WITH_impurities)
-     write(*,REAL_FMT) 'impdens_init        ',  impdens_init 
-     write(*,REAL_FMT) 'impdens_1stinj    ',  impdens_1stinj    
-     write(*,REAL_FMT) 'tstart_imp_1stinj ', tstart_imp_1stinj 
-     write(*,REAL_FMT) 'dt_imp_1stinj     ',  dt_imp_1stinj
-     write(*,REAL_FMT) 'impdens_2ndinj    ',  impdens_2ndinj   
-     write(*,REAL_FMT) 'tstart_imp_2ndinj ',  tstart_imp_2ndinj
-     write(*,REAL_FMT) 'dt_imp_2ndinj     ',  dt_imp_2ndinj
+   write(*,REAL_FMT) 'impdens_init        ',  impdens_init
+    write(*,REAL_FMT,advance='no') 'imp_inj_flat      '
+    do i = 1, 3
+      write(*,'(10ES12.4)',advance='no') imp_inj_flat(i)%density_rise
+      write(*,'(10ES12.4)',advance='no') imp_inj_flat(i)%rise_time
+      write(*,'(10ES12.4)',advance='no') imp_inj_flat(i)%start_time
+    end do
+   write(*,*)
 #endif
 
    !< Additional log for REs

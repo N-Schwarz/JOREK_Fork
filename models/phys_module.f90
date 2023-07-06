@@ -299,36 +299,28 @@ module phys_module
   logical :: add_sources_in_sc    !< Whether to add effect of sources in shock-capturing stabilization or not
 
     ! Runaway electron fluid and deuterium neutrals related inputs
-  real*8  :: gamma_rel
-  integer*4 :: re_initialize
-  real*8  :: initial_re_current_fraction
-  real*8  :: re_gauss_fact
-  real*8  :: re_gauss_origin
-  real*8  :: re_gauss_width
-  logical :: re_trit_seed
-  logical :: re_compt_seed
-  logical :: re_sec_source
-  real*8  :: psinorm_aval_threshold
-  real*8  :: vpar_re_sign
-  real*8  :: re_adv_fact
-  real*8  :: Dre_par, Dre_iso, Dre_num
+  real*8  :: gamma_rel			  !< Relativistic gamma assuming monoenergetic REs
+  integer*4 :: re_initialize              !< Option initialize artificial RE seed. 1: Spatially Gaussian RE seed; 2: RE seed is a scaled down J-profile; any other value implied no artificial RE seed
+  real*8  :: initial_re_current_fraction  !< J_re_seed = f * J (at t=0). Real value b/n 0 to 1. Used only when re_initialize=2
+  real*8  :: re_gauss_fact		  !< Scaling factor for Gauss-seed. Real value. Used only when re_initialize=1
+  real*8  :: re_gauss_origin		  !< Origin for Gauss-seed in units of Psi_norm. Real value b/n 0 to 1. Used only when re_initialize=1
+  real*8  :: re_gauss_width		  !< Width of Gauss seed in units of Psi_norm. Real value. Used only when re_initialize=1
+  logical :: re_trit_seed		  !< Tritium seed
+  logical :: re_compt_seed		  !< Compton seed
+  logical :: re_sec_source		  !< Avalanche source
+  real*8  :: psinorm_aval_threshold	  !< Upper bound of psi_norm beyond which RE avalanche is set to zero
+  real*8  :: vpar_re_sign		  !< Direction of RE parallel motion (+1 or -1)
+  real*8  :: re_adv_fact		  !< fraction of speed-of-light used for RE parallel advection. Real value less than or equal to 1
+  real*8  :: Dre_par		          !< RE parallel diffusivity
+  real*8  :: Dre_iso			  !< RE parallel diffusivity
+  real*8  :: Dre_num  			  !< RE parallel diffusivity
 
-  logical :: Dcontrad
+  logical :: Dcontrad  			  !< Deuterium continuous radiation .t. or .f.
   
   real*8  :: impdens_init
-  real*8  :: impdens_1stinj
-  real*8  :: tstart_imp_1stinj
-  real*8  :: dt_imp_1stinj
-  real*8  :: impdens_2ndinj
-  real*8  :: tstart_imp_2ndinj
-  real*8  :: dt_imp_2ndinj
 
-  real*8  :: Deutdens_1stinj
-  real*8  :: tstart_Deut_1stinj
-  real*8  :: dt_Deut_1stinj
-  real*8  :: Deutdens_2ndinj
-  real*8  :: tstart_Deut_2ndinj
-  real*8  :: dt_Deut_2ndinj
+
+  type (flat_injection) :: imp_inj_flat(1:3), deut_inj_flat(1:3)
 
 
   !> @name Timestepping parameters

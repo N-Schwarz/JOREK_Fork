@@ -312,7 +312,7 @@ do ife = ife_min, ife_max
 #endif
 
 #ifdef WITH_Refluid
-        nre0    = eq_g(mp,9,ms,mt)
+        nre0    = eq_g(mp,var_nre,ms,mt)
 #endif
 
         ! --- Eta for ohmic heating

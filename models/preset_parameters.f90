@@ -41,19 +41,14 @@ subroutine preset_parameters
  Dcontrad = .true.
 
  impdens_init = 0.d0
- impdens_1stinj  = 0.d0
- tstart_imp_1stinj  = 1.d10
- dt_imp_1stinj = 100
- impdens_2ndinj  = 0.d0
- tstart_imp_2ndinj = 1.d10
- dt_imp_2ndinj = 100
-                    
- Deutdens_1stinj = 0.d0
- tstart_Deut_1stinj = 1.d10
- dt_Deut_1stinj = 100
- Deutdens_2ndinj = 0.d0
- tstart_Deut_2ndinj = 1.d10
- dt_Deut_2ndinj = 100
+
+ imp_inj_flat(1:3)%density_rise = (/ 0., 0., 0. /)
+ imp_inj_flat(1:3)%rise_time = (/ 1.d10, 1.d10, 1.d10 /)
+ imp_inj_flat(1:3)%start_time = (/ 1.d10, 1.d10, 1.d10 /)
+ 
+ deut_inj_flat(1:3)%density_rise = (/ 0., 0., 0. /)
+ deut_inj_flat(1:3)%rise_time = (/ 1.d10, 1.d10, 1.d10 /)
+ deut_inj_flat(1:3)%start_time = (/ 1.d10, 1.d10, 1.d10 /)
 
 
 

@@ -213,8 +213,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 re_trit_seed, re_compt_seed, re_sec_source, re_adv_fact, Dre_par, Dre_iso, Dre_num,     &
                 impdens_init,  &
                 psinorm_aval_threshold, Dcontrad, &
-                impdens_1stinj, tstart_imp_1stinj, dt_imp_1stinj, impdens_2ndinj, tstart_imp_2ndinj, dt_imp_2ndinj, &
-                Deutdens_1stinj, tstart_Deut_1stinj, dt_Deut_1stinj, Deutdens_2ndinj, tstart_Deut_2ndinj, dt_Deut_2ndinj
+                imp_inj_flat, deut_inj_flat
 
 
 if (my_id .eq. 0) then
