@@ -152,11 +152,14 @@ real*8  :: source_neutral_arr(n_inj_max), source_neutral_drift_arr(n_inj_max)
 real*8  :: source_bg, source_imp, source_bg_drift
 real*8  :: source_bg_arr(n_inj_max), source_imp_arr(n_inj_max), source_bg_drift_arr(n_inj_max) 
 #endif
+
+real*8  :: Te_corr_eV
+
 #if (defined WITH_Neutrals) || (defined WITH_Impurities)
 real*8  :: local_radiation, local_radiation_bg, local_E_ion, total_radiation, total_radiation_bg, total_E_ion, local_P_ei, total_P_ei
 real*8  :: local_P_ion, total_P_ion
 real*8  :: local_radiation_phi(n_plane), total_radiation_phi(n_plane)
-real*8  :: ne_SI, Te_eV, Te_corr_eV, Ti_eV
+real*8  :: ne_SI, Te_eV, Ti_eV
 
 ! SPI-related variables
 integer    :: spi_i
@@ -199,6 +202,8 @@ real*8  :: Vlight, nre0
     real*8     :: pstar, pstar_old, funcpstar, derivpstar, nimp_j
     real*8     :: S_avalanche, fact_ress
     real*8     :: E_par, ne_SI_re
+    
+    real*8     :: Z_eff 
 
 ! Additional diagnostic variables for impurity model
 ! See https://www.jorek.eu/wiki/doku.php?id=model500_501_555 for details
@@ -207,7 +212,7 @@ real*8  :: Vlight, nre0
 !   -Mass ratio between main ions and impurites (m_i/m_imp)
 real*8  :: m_i_over_m_imp, m_imp
 !   -Mean impurity ionization state
-real*8  :: Z_imp, dZ_imp_dT, Z_eff, eta_coef, ne_JOREK, dne_JOREK_dx, dne_JOREK_dy
+real*8  :: Z_imp, dZ_imp_dT, eta_coef, ne_JOREK, dne_JOREK_dx, dne_JOREK_dy
 real*8  :: Z_eff_imp
 !   -Corrected plasma temperature and density for radiation calculation
 real*8  :: Ti_corr_eV
@@ -475,10 +480,10 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp           thm_wk, mag_wk, eta_T, vpar_disp, fric_disp, p0_p, T0_corr, r0_corr, u0_p,     &
 !$omp           AR0, AR0_p, AR0_s, AR0_t, AR0_sp, AR0_tp, AR0_Rp, AZ0, AZ0_p, AZ0_s, AZ0_t, AZ0_sp, AZ0_tp, AZ0_Zp, A30, &
 !$omp           A30_p, A30_s, A30_t, A30_ss, A30_tt, A30_st, A30_R, A30_RR, A30_ZZ, BR_Z, BZ_R,&
-!$omp           eta_T_ohm, rn0, rn0_corr, rimp0, rimp0_corr,                                   &
+!$omp           eta_T_ohm, rn0, rn0_corr, rimp0, rimp0_corr, Z_eff, Te_corr_eV,                &
 
 #if (defined WITH_Neutrals) || (defined WITH_Impurities)
-!$omp           i_imp, frad_bg, Lrad_imp, Te_corr_eV, Te_eV, ne_SI, Ti_eV,                     &
+!$omp           i_imp, frad_bg, Lrad_imp, Te_eV, ne_SI, Ti_eV,                                 &
 !$omp           spi_R_tmp, spi_Z_tmp, spi_phi_tmp, ns_radius_tmp,                              &
 !$omp           spi_psi_tmp, spi_grad_psi_tmp, spi_i, i_inj,                                   &
 !$omp           n_spi_tmp, source_tmp, ns_shape, ns_shape_drift,                               &
@@ -488,7 +493,7 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp           source_bg_arr, source_imp_arr, source_bg_drift_arr,                            &
 !$omp           m_i_over_m_imp, m_imp, Z_imp, dZ_imp_dT,                                       &
 !$omp           ne_JOREK, P_imp, Lrad, E_ion, E_ion_bg, ion_i,                                 &
-!$omp           ion_k, Z_eff, Z_eff_imp, eta_coef, Ti_corr_eV,                                 &
+!$omp           ion_k, Z_eff_imp, eta_coef, Ti_corr_eV,                                        &
 #endif
 !$omp           Ec_tot,  &
 !$omp           ne_total_si,                                                    &
@@ -1053,9 +1058,9 @@ do ife = ife_min, ife_max
   Epar0 =  E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
   Ecrit = (ne_SI_re * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
-  if (with_impurities) then
+#ifdef WITH_Impurities
     ne_total_si = ne_total_si + central_density*1.d20 * ( beta_imp * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
-  endif
+#endif
   Ec_tot = (ne_total_si * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
   
   ! Contribution from neutral deuterium

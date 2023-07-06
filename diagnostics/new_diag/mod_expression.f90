@@ -613,17 +613,22 @@ module mod_expression
       fact_resistiv, fact_Er, fact_flux, fact_rad
     real*8  :: rn0, rn0_s, rn0_t, rn0_ss, rn0_tt, rn0_st, rn0_p, rn0_pp, rn0_R, rn0_Z
     real*8  :: rimp0, rimp0_s, rimp0_t, rimp0_ss, rimp0_tt, rimp0_st, rimp0_p, rimp0_pp, rimp0_R, rimp0_Z
+    real*8  :: Te_corr_eV, Te_eV
+    real*8  :: ne_SI, ne_JOREK
 
 #if (defined WITH_Neutrals) || (defined WITH_Impurities)
-    real*8  :: Te_corr_eV, Te_eV
     real*8  :: LradDrays_T, LradDcont_T, Sion_T, Srec_T
     real*8  :: dLradDrays_dT, dLradDcont_dT, dSion_dT, dSrec_dT
-    real*8  :: ne_SI, ne_JOREK                              ! Electron density used in radiation rate
     real*8  :: Lrad_imp, r_imp_bg, i_imp, frad_bg
 #endif
+
 #if (defined WITH_Neutrals) && (!defined WITH_Impurities)
     real*8  :: Arad_bg, Brad_bg, Crad_bg
 #endif
+
+    ! Effective charge of all species
+    real*8  :: Z_eff
+
 #ifdef WITH_Impurities
     ! See https://www.jorek.eu/wiki/doku.php?id=model500_501_555 for details
     real*8  :: rimp0_corr
@@ -632,8 +637,6 @@ module mod_expression
     real*8  :: m_i_over_m_imp
     !   -Mean impurity ionization state
     real*8  :: Z_imp, T0_Zimp, alpha_Zimp
-    !   -Effective charge of all species
-    real*8  :: Z_eff
     !   -Coefficients related to Z_imp
     real*8  :: alpha_imp
     real*8  :: beta_imp
@@ -1676,10 +1679,10 @@ max_pstariter = 80
           J_boot = 0.d0
 #endif
 
-#if (defined WITH_Neutrals) && (!defined WITH_Impurities)
-
    Te_corr_eV = Te0_corr/(EL_CHG*MU_ZERO*central_density * 1.d20)
    Te_eV = Te0/(EL_CHG*MU_ZERO*central_density * 1.d20)
+
+#if (defined WITH_Neutrals) && (!defined WITH_Impurities)
 
    if (use_imp_adas) then
      call atomic_coeff_deuterium(Te0_corr, Sion_T, dSion_dT, Srec_T, dSrec_dT,        &
@@ -1727,10 +1730,10 @@ max_pstariter = 80
 
 #endif
 
-#ifdef WITH_Impurities
-
           Te_corr_eV   = Te0_corr/(EL_CHG*MU_ZERO*central_density*1.d20)  ! Te in eV
           Te_eV = Te0/(EL_CHG*MU_ZERO*central_density * 1.d20)
+
+#ifdef WITH_Impurities
   
           if (allocated(P_imp)) deallocate(P_imp)
           allocate(P_imp(0:imp_adas(index_main_imp)%n_Z))
@@ -1800,9 +1803,9 @@ max_pstariter = 80
   Epar0 = E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
   Ecrit = (ne_SI_re * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
-  if (with_impurities) then
+#ifdef WITH_Impurities
     ne_total_si = ne_total_si + central_density*1.d20 * ( beta_imp * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
-  endif  
+#endif  
   Ec_tot = (ne_total_si * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
   
   ! Contribution from neutral deuterium
@@ -1896,7 +1899,7 @@ max_pstariter = 80
     sum7 = ( central_density*1.d20 * rn0 / ne_SI_re ) * (   2.d0/3.d0 * float( 1**2 - 0**2) * log ( paj32_De  + 1.d0 )  - 2.d0/3.d0 * (float(1 - 0))**2 * paj32_De / (paj32_De + 1.d0)  )
     sum7D = central_density*1.d20 * rn0 / ne_SI_re  * (   2.d0/3.d0 * float( 1**2 - 0**2) * 1.d0 / ( paj32_De  + 1.d0 ) * 3.d0/2.d0 * sqrt(pstar_old) * (exp(aconst_De))**1.5d0  - 2.d0/3.d0 * (float(1 - 0))**2 * 3.d0/2.d0 / pstar_old * paj32_De / (paj32_De + 1.d0)**2.d0  )
    ! Contribution from unionized and partially ionized impurity states
-   if (with_impurities) then   
+#ifdef WITH_impurities
     if ( trim(imp_type(index_main_imp)) .eq. 'Ne' .or. trim(imp_type(index_main_imp)) .eq. 'Ar') then
      do j= 0, atomnum_imp - 1
        nimp_j = central_density*1.d20 * m_i_over_m_imp * P_imp(j) * rimp0_corr
@@ -1909,7 +1912,7 @@ max_pstariter = 80
        sum7D = sum7D + ( nimp_j / ne_SI_re ) * (   2.d0/3.d0 * float( atomnum_imp**2 - j**2) * 1.d0 / ( paj32  + 1.d0 ) * 3.d0/2.d0 * sqrt(pstar_old) * (exp(aconst(j)))**1.5d0  - 2.d0/3.d0 * (float(atomnum_imp - j))**2 * 3.d0/2.d0 / pstar_old * paj32 / (paj32 + 1.d0)**2.d0  )
      end do
     endif
-   endif
+#endif
 
     !nus = (1.d0/Clogc) * ( Clogee + sum1 * ( log (pstar_old* sqrt(gamma_of_pstar-1.d0)) - beta_of_pstar**2.d0 ) + sum2 )
     !nud = (1.d0/Clogc) * ( Clogee + Clogei*Z_eff + sum3 *log(pstar_old) + sum4 )
