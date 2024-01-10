@@ -1,5 +1,5 @@
 subroutine Integrals_3D(my_id, node_list, element_list, density_tot, density_in, density_out, pressure, pressure_in, pressure_out, &
-                        kin_par_tot, kin_par_in, kin_par_out, mom_par_tot, mom_par_in,mom_par_out)
+                        kin_par_tot, kin_par_in, kin_par_out, mom_par_tot, mom_par_in,mom_par_out, varminout, varmaxout)
 !---------------------------------------------------------------
 !
 !---------------------------------------------------------------
@@ -46,7 +46,7 @@ real*8  :: dT_dpsi,dT_dz,dT_dpsi2,dT_dz2,dT_dpsi_dz,dT_dpsi3,dT_dpsi_dz2, dT_dps
 integer :: i, j, k, in, ms, mt, mp, iv, inode, ife, n_elements, ifail
 integer :: ierr, n_cpu, my_id, ife_delta, ife_min, ife_max, omp_nthreads, omp_tid
 real*8  :: beta_p, beta_n, beta_t, aminor
-real*8  :: xjac, BigR, wst, P_int, C_intern, zj0, ps0, r0, T0, T0e, Vol, Volume, Area, Bgeo, psi_limit
+real*8  :: xjac, BigR, wst, P_int, C_intern, zj0, ps0, r0, T0, Te0, Vol, Volume, Area, Bgeo, psi_limit
 real*8  :: r0_corr, T0_corr
 
 real*8  :: current_in, current_out, D_int, D_ext, P_ext, C_ext, P_max, delta_phi, phi, P_tot, D_tot
@@ -63,7 +63,12 @@ real*8  :: source_neutral_arr(n_inj_max), source_neutral_drift_arr(n_inj_max)
 
 integer    :: spi_i, i_inj
 
+
 real*8	:: Cre_intern, Cre_ext, recurrent_in, recurrent_out, nre0, Vlight
+
+
+real*8,dimension(n_var),intent(out) :: varminout,varmaxout
+real*8,dimension(n_var) :: varmin,varmax
 
 
 call MPI_COMM_SIZE(MPI_COMM_WORLD, n_cpu, ierr) ! number of MPI procs
@@ -142,6 +147,9 @@ ife_delta = ceiling(float(element_list%n_elements) / n_cpu)
 ife_min   =      my_id     * ife_delta + 1
 ife_max   = min((my_id +1) * ife_delta, element_list%n_elements)
 
+!> Initialise the minimum of all variables
+varmin = 1.e50; varmax = -1.e50; varminout = 1.e50; varmaxout = -1.e50;
+
 !$omp parallel default(none)                                                                   &
 !$omp   shared(element_list,node_list, H, H_s, H_t, HZ, HZ_p, ife_min, ife_max, xpoint, xcase, &
 !$omp          ES, my_id, use_pellet, psi_limit, delta_phi,                                    &
@@ -161,10 +169,10 @@ ife_max   = min((my_id +1) * ife_delta, element_list%n_elements)
 !$omp          central_mass, pellets, tor_frequency,                                           &
 !$omp          ns_radius_ratio, ns_radius_min, spi_shard_file,                                 &
 #endif
-!$omp          wgauss_copy)                                                                    &
+!$omp          wgauss_copy,varmin,varmax)                                                      &
 !$omp   private(ife,iv,inode,element,nodes,i,j, k,in, mp, ms, mt, spi_i,i_inj,                 &
 !$omp           x_g, y_g, x_s, y_s, x_t, y_t, xjac, eq_g, eq_s, eq_t, eq_p,                    &
-!$omp           wst, BigR, r0, T0, T0e, zj0, ps0, dTdx, dTdy, drhodx, drhody, dpsidx, dpsidy, dudx, dudy,  &
+!$omp           wst, BigR, r0, T0, Te0, zj0, ps0, dTdx, dTdy, drhodx, drhody, dpsidx, dpsidy, dudx, dudy,  &
 !$omp           dpdx, dpdy, grad_P, grad_psi, grad_P_psi,gradP_max, gradP_psi_max, phi,        &
 !$omp           P_max, source_pellet, source_volume, eq_zne, eq_zTe, vpar0, BB2, eta_T_ohm,    &
 !$omp           heat_source, heat_source_i, heat_source_e, particle_source, rotation_source,   &
@@ -194,7 +202,8 @@ omp_tid      = 0
 #endif
 !$omp                D_int, D_ext, P_int, H_int, S_int, H_ext, S_ext, P_ext, C_intern, C_ext, Cre_intern, Cre_ext, &
 !$omp                TVP_int, TVP_ext, TVP_tot, VP_int, VP_ext, VP_tot, VK_tot, VK_int, VK_ext, VM_ext,                  &
-!$omp                VM_int, VM_tot, Vol, P_tot, D_tot,J2_tot, J2_int, J2_ext)
+!$omp                VM_int, VM_tot, Vol, P_tot, D_tot,J2_tot, J2_int, J2_ext)                &
+!$omp reduction(max:varmax) reduction(min:varmin)
 
 do ife = ife_min, ife_max
 
@@ -252,6 +261,13 @@ do ife = ife_min, ife_max
     enddo
   enddo
 
+  ! --- Determine smallest and largest values of the variables in the whole domain (on Gauss points and toroidal integration
+  ! surfaces)
+  do k=1,n_var
+    varmin(k) = min(varmin(k),minval(eq_g(:,k,:,:)))
+    varmax(k) = max(varmax(k),maxval(eq_g(:,k,:,:))) 
+  enddo
+
   do ms=1, n_gauss
     do mt=1, n_gauss
 
@@ -292,11 +308,11 @@ do ife = ife_min, ife_max
 #ifdef WITH_TiTe
         T0      = eq_g(mp,var_Ti,ms,mt)
         T0_corr = corr_neg_temp1(T0)
-        T0e     = corr_neg_temp1(eq_g(mp,var_Te,ms,mt))
+        Te0     = corr_neg_temp1(eq_g(mp,var_Te,ms,mt))
 #else
         T0      = eq_g(mp,var_T,ms,mt)
         T0_corr = corr_neg_temp1(T0)
-        T0e     = eq_g(mp,var_T,ms,mt) /2.d0
+        Te0     = eq_g(mp,var_T,ms,mt) /2.d0
 #endif
         zj0    = eq_g(mp,var_zj,ms,mt)
         ps0    = eq_g(mp,var_psi,ms,mt)
@@ -504,10 +520,15 @@ endif
   call MPI_AllReduce(local_n_particles, total_n_particles,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
 #endif
 
+
 #ifdef WITH_Refluid
 call MPI_AllReduce(Cre_intern,recurrent_in,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
 call MPI_AllReduce(Cre_ext,recurrent_out,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
 #endif
+
+call MPI_AllReduce(varmin,varminout,n_var,MPI_DOUBLE_PRECISION,MPI_MIN,MPI_COMM_WORLD,ierr)
+call MPI_AllReduce(varmax,varmaxout,n_var,MPI_DOUBLE_PRECISION,MPI_MAX,MPI_COMM_WORLD,ierr)
+
 
 rho_norm = central_density*1.d20 * central_mass * 1.67d-27
 t_norm   = sqrt(MU_zero*rho_norm)

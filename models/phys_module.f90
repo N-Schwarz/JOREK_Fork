@@ -14,13 +14,17 @@ module phys_module
   real*8  :: eta_T_0              !< Initial resistivity
   real*8  :: eta_ohmic            !< Resistivity at core for the Ohmic heating term
   logical :: eta_T_dependent      !< Resistivity dependent on temperature? Otherwise constant
+  logical :: eta_coul_log_dep     !< Resistivity dependent on variations of the Coulomb logarithm?
   real*8  :: T_max_eta            !< Temperature above which the resistivity is truncated (use with care; only for numerical reasons)
   real*8  :: T_max_eta_ohm        !< Temperature above which the resistivity used in the Ohmic heating term is truncated (use with care; only for numerical reasons)
+  real*8  :: T_max_visco          !< Temperature above which the viscosity is truncated; It is aimed for keeping the Prandtl number constant when T_max_eta is activated. 
   real*8  :: visco                !< Viscosity at plasma center (normalized)
+  real*8  :: visco_heating        !< Viscosity used in the perpendicular viscous heating term
   real*8  :: visco_rst            !< visco value from restart file
   real*8  :: visco_par_rst        !< visco_par value from restart file
   real*8  :: eta_rst              !< eta value from restart file
   logical :: visco_T_dependent    !< Viscosity dependent on temperature? Otherwise constant.
+  logical :: visco_old_setup      !< If true, the old perp. viscosity treatment is used for compatibility (old visco depends on R^2)
   real*8  :: visco_par            !< Parallel viscosity (normalized)
   real*8  :: visco_par_heating    !< Parallel viscosity used in the parallel viscous heating term (normalized)
   real*8  :: F0                   !< Determines fixed toroidal magnetic field: \f$ B_\phi = F_0/R \f$
@@ -34,6 +38,7 @@ module phys_module
   real*8  :: tauIC                !< Scaling factor for diamagnetic terms (see [[diamag|diamagnetic]])
   real*8  :: tauIC_nominal        !< Nominal scaling factor (considering Ti=Te) for diamagnetic terms (see [[diamag|diamagnetic]])
   real*8  :: eta_spitzer          !< Spitzer resistivity in the core (considering main ion charge Z=1, effective ion charge Zeff=1)
+  real*8  :: lnA_center           !< Coulomb logarithm in the core (used for the resistivity function)
   logical :: Wdia                 !< Include diamagnetic flows in viscosity terms? (see [[wdia|here]])
   logical :: U_sheath             !< Use Stangeby BCs for electric potential
   logical :: renormalise          !< Set true to give all input MHD parameters in S.I. units (ie. renormalise them before equations)
@@ -58,10 +63,12 @@ module phys_module
   integer :: nout_projection      !< Output particle projection every nout_projection timesteps (only for diagnostics)
                                   !< Note that the 'to_h5' or 'to_vtk' flag should be .true. in the 'new_projection' function for this parameter to be in play
   integer :: xcase                !< 1->LowerXpoint. 2->UpperXpoint. 3->doubleNull
+  logical :: forceSDN             !< Force a symmetric double null, within the accuracy of SDN_threshold
   real*8  :: SDN_threshold        !< threshold, in absolute psi, for a symmetric-double-null grid construction
   integer :: rst_format           !< 0 == old format, 1 == new format for restart file
   logical :: restart              !< Restart a code run from the restart file jorek_restart.h5?
   logical :: regrid               !< Re-generate the flux-aligned grid (does not work currently)?
+  logical :: regrid_from_rz       !< Re-generate the flux-aligned grid from an rz equilibrium
   logical :: import_equil         !< (presently unused)
   logical :: xpoint               !< X-point plasma or not? see also xcase
   real*8  :: Z_xpoint_limit(2)    !< Search the lower X-point in the region Z < Z_xpoint_limit(1) and the upper X-point in the region Z > Z_xpoint_limit(2) 
@@ -132,6 +139,7 @@ module phys_module
   integer :: maxNewton            !< maximum number of Newton iterations
   real(kind=8) :: gamma_Newton    !< Newton gamma-parameter: gmres_tol = gamma_Newton*(normRHScurrent/normRHSprevious)**alpha_Newton
   real(kind=8) :: alpha_Newton    !< Newton alpha-parameter: gmres_tol = gamma_Newton*(normRHScurrent/normRHSprevious)**alpha_Newton
+  logical :: strumpack_matching   !< Perform maximum-diagonal-product reordering algorithm in STRUMPACK solver (improves direct solver, but use matrix centralization)
 
   ! ------------------------------------------------
   ! --- Structures to implement BCs in model600
@@ -298,6 +306,7 @@ module phys_module
   logical :: visco_num_T_dependent!< Hyper-visocsity dependent on temperature? Otherwise constant.
   logical :: add_sources_in_sc    !< Whether to add effect of sources in shock-capturing stabilization or not
 
+
     ! Runaway electron fluid and deuterium neutrals related inputs
   real*8  :: gamma_rel			  !< Relativistic gamma assuming monoenergetic REs
   integer*4 :: re_initialize              !< Option initialize artificial RE seed. 1: Spatially Gaussian RE seed; 2: RE seed is a scaled down J-profile; any other value implied no artificial RE seed
@@ -322,6 +331,19 @@ module phys_module
 
   type (flat_injection) :: imp_inj_flat(1:3), deut_inj_flat(1:3)
 
+
+
+  !> @name VMS terms: The logical flag 'use_vms' enables to use variable
+  !multiscale based stabilization in fullmhd model 750. The coefficients
+  !vms_coeff_var are the real parameters to scale the stabilization added in
+  !each equation. For brief description please look at the wiki page:
+  ! https://www.jorek.eu/wiki/doku.php?id=vms
+  logical    :: use_vms !< Use VMS stabilization in model 750 only
+  real*8     :: vms_coeff_AR, vms_coeff_AZ, vms_coeff_A3
+  real*8     :: vms_coeff_UR, vms_coeff_UZ, vms_coeff_Up
+  real*8     :: vms_coeff_T, vms_coeff_Te, vms_coeff_Ti
+  real*8     :: vms_coeff_rho, vms_coeff_rhon, vms_coeff_rhoimp
+  
 
   !> @name Timestepping parameters
   real*8  :: tstep             		!< Size of the timesteps (\f$ \Delta t \f$)
@@ -814,7 +836,7 @@ module phys_module
     li3_tot_t(:), part_src_tot_t(:), heat_src_tot_t(:), volume_t(:), area_t(:), mag_ener_src_tot(:), &
     dpart_tot_dt(:), part_flux_Dpar_t(:), part_flux_Dperp_t(:), part_flux_vpar_t(:), part_flux_vperp_t(:), & 
     dnpart_tot_dt(:), npart_tot_t(:), npart_flux_t(:), density_tot_t(:), flux_poynting_t(:),         &
-    thermal_e_tot_t(:), thermal_i_tot_t(:)
+    thermal_e_tot_t(:), thermal_i_tot_t(:), visco_dissip_tot_t(:)
 
   !> @name gmres parameters
   integer             :: iter_precon        !< whenever the number of gmres iterations exceeds iter_precon, the preconditioning matrix is updated

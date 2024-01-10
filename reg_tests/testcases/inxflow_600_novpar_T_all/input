@@ -52,6 +52,7 @@
  Z_geo = 0.
 
  F0    = 3.0
+ eta_coul_log_dep = .false.
 
  amin     = 1.
 
@@ -70,6 +71,8 @@
  eta_ohmic = 1.d-7
  visco = 4.d-6
  visco_par = 1.d-4
+
+ visco_old_setup = .true.
  
  visco_num = 1.d-11
  visco_par_num = 1.d-11

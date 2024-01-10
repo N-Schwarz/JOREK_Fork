@@ -25,6 +25,7 @@ module mod_expression
   use mod_poloidal_currents
   use mod_impurity, only: radiation_function, radiation_function_linear
   use mod_atomic_coeff_deuterium, only : atomic_coeff_deuterium
+  use mod_plasma_functions
 
   implicit none
   
@@ -33,7 +34,7 @@ module mod_expression
   
   
   public
-  private add
+  !private add
   
   
   
@@ -127,6 +128,7 @@ module mod_expression
     call add(exprs_all, 'Jtor        ', 'Physical current density (phi component)              ')
     call add(exprs_all, 'Jpol        ', 'Poloidal current value in the poloidal field direction')
     call add(exprs_all, 'FFprime_loc ', 'Local FFprime value, calculated from 3D JxB= grad p   ')
+    call add(exprs_all, 'p_prime_loc ', 'Local derivative of the pressure w.r.t. psi           ')
     call add(exprs_all, 'JxB_R       ', 'JxB force (R component)                               ')
     call add(exprs_all, 'JxB_Z       ', 'JxB force (Z component)                               ')
     call add(exprs_all, 'JxB_phi     ', 'JxB force (phi component)                             ')
@@ -192,6 +194,7 @@ module mod_expression
     call add(exprs_all, 'E_crit      ', 'E_crit for RE avalanching (Connor-Hastie)             ')
     call add(exprs_all, 'E_dreicer   ', 'Electrical field for Dreicer RE primary source        ')
     call add(exprs_all, 'theta_geo   ', 'Polar angle with respect to Rgeo, Zgeo                ')
+    call add(exprs_all, 'unity       ', 'Just 1, trick needed for flux surface average         ')
     call add(exprs_all, 'bnd_normal_R', 'R component of unit vector pointing outside JOREKs bnd', 'boundary    ')
     call add(exprs_all, 'bnd_normal_Z', 'Z component of unit vector pointing outside JOREKs bnd', 'boundary    ')
     call add(exprs_all, 'Bnorm       ', 'Normal     magnetic field to the JOREKs boundary      ', 'boundary    ')
@@ -209,7 +212,8 @@ module mod_expression
     call add(exprs_all, 'heatF_par_cv', 'Convective parallel heat flux (normal to the boundary)', 'boundary    ')
     call add(exprs_all, 'heatF_prp_cv', 'Convective perpend  heat flux (normal to the boundary)', 'boundary    ')
     call add(exprs_all, 'heatF_tot_cv', 'Convective total    heat flux (normal to the boundary)', 'boundary    ')
-    call add(exprs_all, 'heatF_total ', 'Total heat flux (normal to the boundary)              ', 'boundary    ')
+    call add(exprs_all, 'heatF_tot_th', 'Total thermal       heat flux (normal to the boundary)', 'boundary    ')
+    call add(exprs_all, 'heatF_total ', 'Total               heat flux (normal to the boundary)', 'boundary    ')
     call add(exprs_all, 'kinEn_F_perp', 'Perpend kinetic energy flux (normal to the boundary)  ', 'boundary    ')
     call add(exprs_all, 'kinEn_F_par ', 'Parall  kinetic energy flux (normal to the boundary)  ', 'boundary    ')
     call add(exprs_all, 'kinEn_F_tot ', 'Total   kinetic energy flux (normal to the boundary)  ', 'boundary    ')
@@ -242,6 +246,7 @@ module mod_expression
     call add(exprs_all, 'S_avalanche ', 'RE avalanche source                                   ', 'boundary    ')
 #endif    
     ! --- List of volume and boundary integrals
+    call add(exprs_all_int, 'Time        ', 'Time                                                  ')
     call add(exprs_all_int, 'index_now   ', 'Restart file index (or number of run tsteps)          ')
     call add(exprs_all_int, 'psi_axis    ', 'psi at magnetic axis                                  ')
     call add(exprs_all_int, 'R_axis      ', 'R of magnetic axis                                    ')
@@ -286,7 +291,8 @@ module mod_expression
     call add(exprs_all_int, 'Heat_src_in ', 'Heat source (inside  LCFS)                            ')
     call add(exprs_all_int, 'Heat_src_out', 'Heat source (outside LCFS)                            ')
     call add(exprs_all_int, 'Viscpar_diss', 'Total parallel viscosity dissipation                  ')
-    call add(exprs_all_int, 'Friction_diss','Total frictional dissipation                          ')
+    call add(exprs_all_int, 'Visc_diss   ', 'Total perpendicular viscosity dissipation             ')
+    call add(exprs_all_int, 'Fric_diss   ', 'Total frictional dissipation                          ')
     call add(exprs_all_int, 'Wmag_src_tot', 'Total magnetic energy source (from current source)    ')
     call add(exprs_all_int, 'Ohmic_tot   ', 'Total ohmic heating                                   ')
     call add(exprs_all_int, 'Ohmic_in    ', 'Ohmic heating (inside  LCFS)                          ')
@@ -308,6 +314,9 @@ module mod_expression
     call add(exprs_all_int, 'Ip_tot      ', 'Total toroidal plasma current                         ')
     call add(exprs_all_int, 'Ip_in       ', 'Toroidal plasma current (inside  LCFS)                ')
     call add(exprs_all_int, 'Ip_out      ', 'Toroidal plasma current (outside LCFS)                ')
+    call add(exprs_all_int, 'int3d_jR_tot', 'Integral of the toroidal current density               ')
+    call add(exprs_all_int, 'int3d_jR_in ', 'Integral of the toroidal current density (inside  LCFS)')
+    call add(exprs_all_int, 'int3d_jR_out', 'Integral of the toroidal current density (outside LCFS)')
     call add(exprs_all_int, 'li3         ', 'Internal inductance inside LCFS, li(3)                ')
     call add(exprs_all_int, 'li3_tot     ', 'Internal inductance inside grid, li(3)                ')
     call add(exprs_all_int, 'beta_p      ', 'Poloidal beta, of the plasma inside LCFS              ')
@@ -553,7 +562,7 @@ module mod_expression
   
   
   !> Evaluate one/several expressions at one/several poloidal and one/several toroidal positions.
-  subroutine eval_expr(eq, units, expr_list, pol_pos_list, tor_pos_list, result, ierr)
+  subroutine eval_expr(eq, units, expr_list, pol_pos_list, tor_pos_list, result, ierr, flux_av, only_n0)
 
     character(len=64), parameter :: THIS_ROUTINE_NAME = trim(THIS_MOD_NAME) // ':eval_expr'
     
@@ -565,6 +574,8 @@ module mod_expression
     type(t_tor_pos_list), target, intent(in)    :: tor_pos_list
     real*8, allocatable,          intent(inout) :: result(:,:,:,:)
     integer,                      intent(out)   :: ierr
+    logical, optional,            intent(in)    :: flux_av   !< Prepare data for proper flux surface average?
+    logical, optional,            intent(in)    :: only_n0   !< only use n=0 toroidal harmonic
     
     ! --- Local variables
     type(t_pol_pos), pointer :: pol_pos
@@ -600,7 +611,9 @@ module mod_expression
       Vsound, Vneo, Vperp_e, Vperp_i, V_ExB, Vstar_e, Vstar_i, mu_neo, ki_neo, J_boot, Te0_eV,     &
       ne0_20, ln_Lambda, ln_Lambda0, dpsi_dt 
     real*8 :: T0_corr, Ti0_corr, Te0_corr, r0_corr, rn0_corr
+    real*8 :: T_or_Te, T_or_Te_corr, T_or_Te_0 
     real*8 :: FFprime_loc, Jpol, JpolR, JpolZ, Btot, Jpar, Jpar_ionsat, fact_jsat, Bnorm, Btan, Jtor
+    real*8 :: p_prime_loc
     real*8 :: nmlR, nmlZ, theta_geo, VR, VZ, V_phi, Vpar_tot, VperpR, VperpZ
     real*8 :: hh, hh_s, hh_t, hh_ss, hh_tt, hh_st, hhz, hhz_p, hhz_pp, sz, vv(0:n_var)
     real*8 :: delta_g(n_var), delta_s(n_var), delta_t(n_var)
@@ -610,11 +623,12 @@ module mod_expression
     real*8  ::  pres_flux_par, pres_flux_tot, kin_flux_par, kin_flux_tot, neut_part_flux, ExB_norm 
     ! --- Normalization factors
     real*8  :: rho_norm, fact_time, fact_mu_zero, fact_ne, fact_rho, fact_T, fact_vpar,            &
-      fact_resistiv, fact_Er, fact_flux, fact_rad
+      fact_resistiv, fact_Er, fact_flux, fact_rad, fact_ffp_si
     real*8  :: rn0, rn0_s, rn0_t, rn0_ss, rn0_tt, rn0_st, rn0_p, rn0_pp, rn0_R, rn0_Z
     real*8  :: rimp0, rimp0_s, rimp0_t, rimp0_ss, rimp0_tt, rimp0_st, rimp0_p, rimp0_pp, rimp0_R, rimp0_Z
     real*8  :: Te_corr_eV, Te_eV
     real*8  :: ne_SI, ne_JOREK
+    real*8  :: flux_av_fact
 
 #if (defined WITH_Neutrals) || (defined WITH_Impurities)
     real*8  :: LradDrays_T, LradDcont_T, Sion_T, Srec_T
@@ -626,7 +640,7 @@ module mod_expression
     real*8  :: Arad_bg, Brad_bg, Crad_bg
 #endif
 
-    ! Effective charge of all species
+    ! -Effective charge of all species
     real*8  :: Z_eff
 
 #ifdef WITH_Impurities
@@ -708,6 +722,7 @@ if (re_sec_source .eqv. .false.) fact_ress = 0.d0
 
 max_eciter = 40
 max_pstariter = 80   
+
     
     ierr = 0
     
@@ -871,6 +886,10 @@ max_pstariter = 80
               
               do i_tor = 1, n_tor
                 
+                if (present(only_n0)) then 
+                  if (only_n0 .and. (i_tor>1)) cycle
+                endif
+
                 hhz    = HZ   (i_tor)
                 hhz_p  = HZ_p (i_tor)
                 hhz_pp = HZ_pp(i_tor)
@@ -1318,11 +1337,12 @@ max_pstariter = 80
 
           psi_norm = get_psi_n(A30, Z)
           psi_abs  = sqrt(A30_R*A30_R + A30_Z * A30_Z)
+          
+          p_prime_loc = 0.d0
           if (psi_abs > 1.d-6) then
-            FFprime_loc = zj0 + (R**2.d0) * (A30_R*P0_R + A30_Z*P0_Z)/(psi_abs**2.d0)
-          else
-            FFprime_loc = zj0 !--- not fully correct, but better than to put 0...
+            p_prime_loc = (A30_R*P0_R + A30_Z*P0_Z)/(psi_abs**2.d0)
           endif
+          FFprime_loc = zj0 + (R**2.d0) * p_prime_loc
 
 #else
           BB2      = (F0*F0 + ps0_R * ps0_R + ps0_Z * ps0_Z ) / BigR**2
@@ -1346,13 +1366,17 @@ max_pstariter = 80
           Bp_Z     =   0.
           B_R      = ( BR_R + BZ_R + Bp_R ) / Btot
           B_Z      = ( BR_Z + BZ_Z + Bp_Z ) / Btot
-
+          
+          p_prime_loc = 0.d0
           if (psi_abs > 1.d-6) then
-            FFprime_loc = zj0 + (R**2.d0) * (ps0_R*P0_R + ps0_Z*P0_Z)/(psi_abs**2.d0)
-          else
-            FFprime_loc = zj0 !--- not fully correct, but better than to put 0...
+            p_prime_loc = (ps0_R*P0_R + ps0_Z*P0_Z)/(psi_abs**2.d0)
           endif
+          FFprime_loc = zj0 + (R**2.d0) * p_prime_loc
 #endif
+          flux_av_fact = 1.d0
+          if (present(flux_av)) then 
+            if (flux_av) flux_av_fact = R**2.0
+          endif
 
           Kappa_R    = ( Btot*BR*BR_R - BR*BR*B_R   - BZ*BR*B_Z   + Btot*BZ*BR_Z - Btot*Btor**2/BigR ) / Btot**3.
           Kappa_Z    = ( Btot*BR*BZ_R - BR*BZ*B_R   - BZ*BZ*B_Z   + Btot*BZ*BZ_Z                     ) / Btot**3.
@@ -1360,7 +1384,7 @@ max_pstariter = 80
 
           Jtor        = -zj0/BigR
           Jpol        = FFprime_loc * Btheta     / F0     !Jpol = F' Bpol
-          Jpar        = (JpolR*BR + JpolZ*BZ + Jtor*Btor) / Btot
+          Jpar        = (JpolR*BR + JpolZ*BZ + Jtor*Btor) / Btot * sign(1.d0, F0)
           Jpar_ionsat = r0 * vpar0 * Btot 
 
           ! --- Velocity
@@ -1372,159 +1396,33 @@ max_pstariter = 80
           VperpZ   =  VZ - Vpar_tot * BZ / Btot
 
           ! --- Some input profiles
-          if ( eta_T_dependent ) then
-            if ( with_TiTe) then ! (with_TiTe) *****************************************************
-              if ( Te0_corr <= T_max_eta ) then
-                eta_T     =   eta   * (Te0_corr/Te_0)**(-1.5d0)
-                deta_dT   = - eta   * (1.5d0)  * Te0_corr**(-2.5d0) * Te_0**(1.5d0)
-                d2eta_d2T =   eta   * (3.75d0) * Te0_corr**(-3.5d0) * Te_0**(1.5d0)
-              else if ( Te0_corr > T_max_eta ) then
-                eta_T     =   eta   * (T_max_eta/Te_0)**(-1.5d0)
-                deta_dT   =   0.
-                d2eta_d2T =   0.
-              else
-                eta_T     =   eta
-                deta_dT   =   0.d0
-                d2eta_d2T =   0.d0
-              end if
-              if ( eq%xpoint .and. (Te0 .lt. T_min) ) then
-                eta_T     =   eta   * (max(Te0,T_min)/Te_0)**(-1.5d0)
-                deta_dT   =   0.d0
-                d2eta_d2T =   0.d0
-              end if
-
-            else ! (with_TiTe), i.e. with single temperature ***************************************
-              if ( T0_corr <= T_max_eta ) then
-                eta_T     =   eta   * (T0_corr/T_0)**(-1.5d0)
-                deta_dT   = - eta   * (1.5d0)  * T0_corr**(-2.5d0) * T_0**(1.5d0)
-                d2eta_d2T =   eta   * (3.75d0) * T0_corr**(-3.5d0) * T_0**(1.5d0)
-              else if ( T0_corr > T_max_eta ) then
-                eta_T     =   eta   * (T_max_eta/T_0)**(-1.5d0)
-                deta_dT   =   0.
-                d2eta_d2T =   0.
-              else
-                eta_T     =   eta
-                deta_dT   =   0.d0
-                d2eta_d2T =   0.d0
-              end if
-              if ( eq%xpoint .and. (T0 .lt. T_min) ) then
-                eta_T     =   eta   * (max(T0,T_min)/T_0)**(-1.5d0)
-                deta_dT   =   0.d0
-                d2eta_d2T =   0.d0
-              end if
-
-            end if ! (with_TiTe) *******************************************************************
+          if (with_TiTe) then
+            T_or_Te          = Te0
+            T_or_Te_corr     = Te0_corr
+            T_or_Te_0        = Te_0
           else
-            eta_T     = eta
-            deta_dT   = 0.d0
-            d2eta_d2T = 0.d0
-          end if
+            T_or_Te          = T0
+            T_or_Te_corr     = T0_corr
+            T_or_Te_0        = T_0
+          endif
 
-          if ( visco_T_dependent ) then
-            if ( with_TiTe) then ! (with_TiTe) *****************************************************
-              visco_T   =   visco * (Te0_corr/Te_0)**(-1.5d0)
-              dvisco_dT = - visco * (1.5d0)  * Te0_corr**(-2.5d0) * Te_0**(1.5d0)
-              if ( eq%xpoint .and. (Te0 .lt. T_min) ) then
-                visco_T     = visco  * (max(Te0,T_min)/Te_0)**(-1.5d0)
-                dvisco_dT   = 0.d0
-              endif
-            else ! (with_TiTe), i.e. with single temperature ***************************************
-              visco_T   = visco * (T0_corr/T_0)**(-1.5d0)
-              dvisco_dT = - visco * (1.5d0)  * T0_corr**(-2.5d0) * T_0**(1.5d0)
-              if ( eq%xpoint .and. (T0 .lt. T_min) ) then
-                visco_T     = visco  * (max(T0,T_min)/T_0)**(-1.5d0)
-                dvisco_dT   = 0.d0
-              endif
-            end if ! (with_TiTe) *******************************************************************
-          else
-            visco_T   = visco
-            dvisco_dT = 0.d0
-          end if
+          call viscosity(visco, T_or_Te, T_or_Te_corr,T_or_Te_0, visco_T)
         
-          ! --- Hyper-resistivity
-          if ( eta_num_psin_dependent ) then
-            eta_num_T = eta_num * 0.5d0 * ( 1.d0 - tanh( (psi_norm-eta_num_prof(1))/eta_num_prof(2)) )      
-          else if ( eta_num_T_dependent ) then
-            if ( with_TiTe) then ! (with_TiTe) *****************************************************
-              eta_num_T     = eta_num   * (Te0/Te_0)**(-3.d0)
-              if (Te0 .lt. T_min) then
-                eta_num_T   = eta_num   * (max(Te0,T_min)/Te_0)**(-3.d0)
-              endif
-            else !(with_TiTe), i.e. with single temperature ***************************************
-              eta_num_T     = eta_num   * (T0/T_0)**(-3.d0)
-              if (T0 .lt. T_min) then
-                eta_num_T   = eta_num   * (max(T0,T_min)/T_0)**(-3.d0)
-              endif
-            end if 
-          else
-            eta_num_T     = eta_num
-          end if
+          call hyper_resistivity(T_or_Te, T_or_Te_corr, T_or_Te_0, psi_norm, eta_num_T) 
           
-          ! --- Temperature dependent hyper-viscosity
-          if ( visco_num_T_dependent ) then
-            if ( with_TiTe) then ! (with_TiTe) *****************************************************
-              visco_num_T     = visco_num   * (Te0/Te_0)**(-3.d0)
-              if (Te0 .lt. T_min) then
-                visco_num_T   = visco_num   * (max(Te0,T_min)/Te_0)**(-3.d0)
-              endif
-            else !(with_TiTe), i.e. with single temperature ***************************************
-              visco_num_T     = visco_num   * (T0/T_0)**(-3.d0)
-              if (T0 .lt. T_min) then
-                visco_num_T   = visco_num   * (max(T0,T_min)/T_0)**(-3.d0)
-              endif
-            end if
-          else
-            visco_num_T     = visco_num
-          end if
+          call hyper_viscosity(T_or_Te, T_or_Te_corr, T_or_Te_0, visco_num_T) 
           
           if ( with_TiTe ) then ! (with_TiTe) ******************************************************
-            if ( ZKpar_T_dependent ) then
-              ZKi_par_T     = ZK_i_par * (Ti0_corr/Ti_0)**(+2.5d0)
-              dZKi_par_dT   = ZK_i_par * (2.5d0)  * Ti0_corr**(+1.5d0) * Ti_0**(-2.5d0)
-              if (ZKi_par_T .gt. ZK_par_max) then
-                ZKi_par_T   = Zk_par_max
-                dZKi_par_dT = 0.d0
-              end if
-              if ( Ti0 .lt. Ti_min_ZKpar ) then
-                ZKi_par_T   = ZK_i_par * (max(Ti0,Ti_min_ZKpar)/Ti_0)**(+2.5d0)
-                dZKi_par_dT = 0.d0
-              endif
 
-              ZKe_par_T   = ZK_e_par * (Te0_corr/Te_0)**(+2.5d0)
-              dZKe_par_dT = ZK_e_par * (2.5d0)  * Te0_corr**(+1.5d0) * Te_0**(-2.5d0)
-              if (ZKe_par_T .gt. ZK_par_max) then
-                ZKe_par_T   = Zk_par_max
-                dZKe_par_dT = 0.d0
-              end if
-              if ( Te0 .lt. Te_min_ZKpar ) then
-                ZKe_par_T   = ZK_e_par * (max(Te0,Te_min_ZKpar)/Te_0)**(+2.5d0)
-                dZKe_par_dT = 0.d0
-              endif
-            else
-              ZKi_par_T   = ZK_i_par
-              dZKi_par_dT = 0.d0
+            call conductivity_parallel(ZK_i_par, ZK_par_max, Ti0, Ti0_corr, Ti_min_ZKpar, Ti_0, &
+                                       ZKi_par_T, ZK_i_par_neg_thresh, ZK_i_par_neg)
 
-              ZKe_par_T   = ZK_e_par
-              dZKe_par_dT = 0.d0
-            end if
-            ZKpar_T   = 0.d0
+            call conductivity_parallel(ZK_e_par, ZK_par_max, Te0, Te0_corr, Te_min_ZKpar, Te_0, &
+                                       ZKe_par_T, ZK_e_par_neg_thresh, ZK_e_par_neg)
           else ! (with_TiTe), i.e. with single temperature *****************************************
-            if ( ZKpar_T_dependent ) then
-              ZKpar_T     = ZK_par * (T0_corr/T_0)**(+2.5d0)
-              dZKpar_dT   = ZK_par * (2.5d0)  * T0_corr**(+1.5d0) * T_0**(-2.5d0)
-              if (ZKpar_T .gt. ZK_par_max) then
-                ZKpar_T   = Zk_par_max
-                dZKpar_dT = 0.d0
-              end if
-              if ( T0 .lt. T_min_ZKpar ) then
-                ZKpar_T   = ZK_par * (max(T0,T_min_ZKpar)/T_0)**(+2.5d0)
-                dZKpar_dT = 0.d0
-              endif
 
-            else
-              ZKpar_T   = ZK_par
-              dZKpar_dT = 0.d0
-            end if
+            call conductivity_parallel(ZK_par, ZK_par_max, T0, T0_corr, T_min_ZKpar, T_0,       &
+                                      ZKpar_T, ZK_par_neg_thresh, ZK_par_neg)
             ZKi_par_T   = ZKpar_T
             ZKe_par_T   = ZKpar_T
           end if ! (with_TiTe) *********************************************************************
@@ -1592,6 +1490,9 @@ max_pstariter = 80
 
           dpsi_dt   = BigR*(ps0_s*u0_t - ps0_t*u0_s)/xjac + eta_T*zj0 - F0*u0_p 
           ExB_norm  = -dpsi_dt * (ps0_R*nmlR + ps0_Z*nmlZ) / (BigR**2.d0) 
+
+#endif    
+
          
           ! --- Other parameters (combination of the main variables)
           Er       = 0.d0
@@ -1786,6 +1687,25 @@ max_pstariter = 80
           if (Z_eff > imp_adas(1)%n_Z)  Z_eff = imp_adas(1)%n_Z
   
 #endif
+          if ( .not. with_impurities ) then 
+            Z_eff      = 1
+            r0_corr    = corr_neg_dens(r0)
+            rimp0      = 0.d0
+            rimp0_corr = 0.d0
+            beta_imp   = 0.d0
+          endif
+
+          call coulomb_log_ei(T_or_Te, T_or_Te_corr, r0, r0_corr, rimp0, rimp0_corr, beta_imp, ln_Lambda)
+          call resistivity(eta, T_or_Te, T_or_Te_corr, T_max_eta, T_or_Te_0, Z_eff, ln_Lambda, eta_T)          
+          
+#ifdef fullmhd
+          dpsi_dt   = delta_g(var_A3) / tstep 
+#else
+          dpsi_dt   = delta_g(var_psi) / tstep  !BigR*(ps0_s*u0_t - ps0_t*u0_s)/xjac + eta_T*zj0 - F0*u0_p 
+#endif
+          ExB_norm  = -dpsi_dt * (ps0_R*nmlR + ps0_Z*nmlZ) / (BigR**2.d0)   
+          E_par     = - R * ( eta_T * zj0 / R**2                                                       &
+                        + 2.d0*tauIC / r0 * ( (Pi0_R * Ps0_Z - Pi0_Z * Ps0_R) / R + F0 * Pi0_p / R**2 ) )
 
 #ifdef WITH_Refluid
 	  E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 ) + tauIC / r0 * ( (P0_R * Ps0_Z - P0_Z * Ps0_R) / R + F0 * P0_p / R**2 )  )
@@ -2021,6 +1941,8 @@ Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_pr
              fact_rad      = 1.d0/(2.d0/3.d0*MU_ZERO**1.5d0*(central_mass*MASS_PROTON*central_density*1.d20)**0.5d0) ! factor for Prad (not Lrad)
              fact_flux     = 1.d0/(mu_zero*fact_time)  
             fact_nre      = sqrt ( rho_norm / MU_zero ) / ( EL_CHG * R) 
+             fact_ffp_si   = -1.d0   ! En SI:  J_phi * mu_0 * R ~ FF'_SI, then FF'_SI = -FF'_JOREK
+
           else if ( units == JOREK_UNITS ) then
              rho_norm      = 1.d0
              fact_time     = 1.d0
@@ -2034,6 +1956,7 @@ Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_pr
              fact_rad      = 1.d0
              fact_flux     = 1.d0
              fact_nre      = 1.d0
+             fact_ffp_si   = 1.d0
           end if
           
           ! --- factor to calculate ion saturation current in JOREK units
@@ -2110,7 +2033,7 @@ Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_pr
                 res = u0
                 
               case ( 'Phi' )
-                res = u0 * F0 !### sign?
+                res = u0 * F0 / fact_time !### sign?
                 
               case ( 'zj' )
                 res = zj0 / fact_mu_zero
@@ -2228,7 +2151,10 @@ Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_pr
                 res = Jtor / fact_mu_zero
 
               case ( 'FFprime_loc' )
-                res = FFprime_loc
+                res = FFprime_loc * fact_ffp_si
+
+              case ( 'p_prime_loc' )
+                res = p_prime_loc / fact_mu_zero
 
               case ( 'Jpol' )
                 res = Jpol / fact_mu_zero
@@ -2325,6 +2251,9 @@ Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_pr
 
               case ( 'theta_geo'    )
                 res = theta_geo
+              
+              case ( 'unity' )
+                res = 1.d0
 
               case ( 'bnd_normal_R' )
                 res = nmlR
@@ -2380,8 +2309,11 @@ Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_pr
               case ( 'heatF_tot_cv' )
                 res = pres_flux_tot * fact_flux
 
-              case ( 'heatF_total'  )
+              case ( 'heatF_tot_th'  )
                 res = (pres_flux_tot + ZKperp_flux + ZKpar_flux) * fact_flux
+
+              case ( 'heatF_total'  )
+                res = (pres_flux_tot + ZKperp_flux + ZKpar_flux + kin_flux_tot) * fact_flux
 
               case ( 'kinEn_F_par' )
                 res = kin_flux_par * fact_flux
@@ -2453,7 +2385,7 @@ Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_pr
                 
             end select
             
-            result(itorpos, ipolpos, jpolpos, iexpr) = res
+            result(itorpos, ipolpos, jpolpos, iexpr) = res * flux_av_fact  ! factor is R^2 for proper flux surface average, otherwise 1
             
           end do loop_expr
         end do loop_tor

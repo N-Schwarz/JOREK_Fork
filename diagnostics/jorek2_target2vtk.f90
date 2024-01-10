@@ -13,6 +13,8 @@ use basis_at_gaussian
 use diffusivities, only: get_dperp, get_zkperp
 use nodes_elements
 use mod_boundary
+use corr_neg
+use mod_plasma_functions
 use mod_import_restart
 use equil_info, only : get_psi_n, ES
 use mod_interp
@@ -360,7 +362,7 @@ do m=1, n_plane
           D_prof   = get_dperp (psi_norm)
           ZK_prof  = get_zkperp(psi_norm)
 
-          ZKpar_T  = ZK_par * abs(max(T,T_min_ZKpar)/T_0)**2.5
+          call conductivity_parallel(ZK_par, ZK_par_max, T, corr_neg_temp(T), T_min_ZKpar, T_0, ZKpar_T)
 
           scalars(inode,1) = psi
           scalars(inode,2) = rho
