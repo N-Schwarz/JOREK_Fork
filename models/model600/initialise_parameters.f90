@@ -213,7 +213,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 CARIDDI_mode, use_newton, maxNewton, gamma_Newton,  &
 
                 alpha_Newton, vacuum_min, strumpack_matching,       &
-                visco_old_setup, visco_heating, eta_coul_log_dep    &
+                visco_old_setup, visco_heating, eta_coul_log_dep,   &
                 gamma_rel, re_initialize, re_gauss_width, re_gauss_origin, re_gauss_fact, initial_re_current_fraction, vpar_re_sign,   &
                 re_trit_seed, re_compt_seed, re_sec_source, re_adv_fact, Dre_par, Dre_iso, Dre_num,     &
                 impdens_init,  &

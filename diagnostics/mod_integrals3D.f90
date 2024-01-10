@@ -205,8 +205,7 @@ real*8  :: Vlight, nre0
     real*8     :: pstar, pstar_old, funcpstar, derivpstar, nimp_j
     real*8     :: S_avalanche, fact_ress
     real*8     :: E_par, ne_SI_re
-    
-    real*8     :: Z_eff 
+
 
 ! Additional diagnostic variables for impurity model
 ! See https://www.jorek.eu/wiki/doku.php?id=model500_501_555 for details
