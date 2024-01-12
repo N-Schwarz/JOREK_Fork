@@ -1490,8 +1490,7 @@ max_pstariter = 80
 
           dpsi_dt   = BigR*(ps0_s*u0_t - ps0_t*u0_s)/xjac + eta_T*zj0 - F0*u0_p 
           ExB_norm  = -dpsi_dt * (ps0_R*nmlR + ps0_Z*nmlZ) / (BigR**2.d0) 
-
-#endif    
+  
 
          
           ! --- Other parameters (combination of the main variables)
