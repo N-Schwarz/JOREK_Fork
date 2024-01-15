@@ -625,7 +625,7 @@ module mod_expression
     real*8  :: rho_norm, fact_time, fact_mu_zero, fact_ne, fact_rho, fact_T, fact_vpar,            &
       fact_resistiv, fact_Er, fact_flux, fact_rad, fact_ffp_si
     real*8  :: rn0, rn0_s, rn0_t, rn0_ss, rn0_tt, rn0_st, rn0_p, rn0_pp, rn0_R, rn0_Z
-    real*8  :: rimp0, rimp0_s, rimp0_t, rimp0_ss, rimp0_tt, rimp0_st, rimp0_p, rimp0_pp, rimp0_R, rimp0_Z
+    real*8  :: rimp0, rimp0_s, rimp0_t, rimp0_ss, rimp0_tt, rimp0_st, rimp0_p, rimp0_pp, rimp0_R, rimp0_Z, rimp0_corr, beta_imp
     real*8  :: Te_corr_eV, Te_eV
     real*8  :: ne_SI, ne_JOREK
     real*8  :: flux_av_fact
@@ -645,7 +645,6 @@ module mod_expression
 
 #ifdef WITH_Impurities
     ! See https://www.jorek.eu/wiki/doku.php?id=model500_501_555 for details
-    real*8  :: rimp0_corr
     ! Atomic physics coefficients:
     !   -Mass ratio between main ions and impurites (m_i/m_imp)
     real*8  :: m_i_over_m_imp
@@ -653,7 +652,7 @@ module mod_expression
     real*8  :: Z_imp, T0_Zimp, alpha_Zimp
     !   -Coefficients related to Z_imp
     real*8  :: alpha_imp
-    real*8  :: beta_imp
+   ! real*8  :: beta_imp
     !   -Radiation from injected impurities
     real*8  :: Lrad                                ! Radiation rate
     real*8  :: A0_rad, A1_rad, T1_rad, sig1_rad    ! Radiation rate parameters
