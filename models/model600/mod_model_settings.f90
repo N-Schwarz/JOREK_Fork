@@ -3,11 +3,11 @@ module mod_model_settings
 
 implicit none
 
-logical, parameter :: with_vpar       = .true.
+logical, parameter :: with_vpar       = .false.
 logical, parameter :: with_TiTe       = .false.
 logical, parameter :: with_neutrals   = .false. 
 logical, parameter :: with_impurities = .true.
-logical, parameter :: with_refluid    = .false. 
+logical, parameter :: with_refluid    = .true. 
 
 
 ! ##################################################################################################
