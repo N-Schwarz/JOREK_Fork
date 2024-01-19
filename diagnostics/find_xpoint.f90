@@ -133,7 +133,7 @@ if(xcase .ne. UPPER_XPOINT) then
       t_xp_init(1)     = 0.d0
       i_elm_xp_init(1) = 1
       exit
-    else if  (min_indices_lw(1) == 0) then   ! --- if all elements have been excluded, exit search
+    elseif  (min_indices_lw(1) == 0) then   ! --- if all elements have been excluded, exit search
       found_lower = .false.
       exit
     endif
