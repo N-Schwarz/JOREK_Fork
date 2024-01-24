@@ -1051,6 +1051,8 @@ do ife = ife_min, ife_max
 	  E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * zj0 )
 #endif
 
+
+#ifdef WITH_Refluid
 #ifdef WITH_impurities
     ne_SI_re = ne_SI
     Z_eff_temp = Z_eff
@@ -1141,6 +1143,7 @@ do ife = ife_min, ife_max
     !write(*,*) Ec_eff !, ne_SI_re, ne_total_SI, rn0, rn0, beta_imp, atomnum_imp
     
    Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_proton) ! Putting back to JOREK units
+#endif
 #endif
 
 #if (! defined WITH_Impurities)
