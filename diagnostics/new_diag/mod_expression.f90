@@ -1694,23 +1694,20 @@ max_pstariter = 80
 #endif
 
           ExB_norm  = -dpsi_dt * (ps0_R*nmlR + ps0_Z*nmlZ) / (BigR**2.d0)   
-          E_par     = - R * ( eta_T * zj0 / R**2                                                       &
-                        + 2.d0*tauIC / r0 * ( (Pi0_R * Ps0_Z - Pi0_Z * Ps0_R) / R + F0 * Pi0_p / R**2 ) )
+
 			
           !E_par = - R * ( eta_T * zj0 / R**2                                                       &
           !              + 2.d0*tauIC / r0 * ( (Pi0_R * Ps0_Z - Pi0_Z * Ps0_R) / R + F0 * Pi0_p / R**2 ) )
 
 #ifdef WITH_Refluid
-	    E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 )  ) + 2.d0*tauIC / r0 * ( (Pi0_R * Ps0_Z - Pi0_Z * Ps0_R) / R + F0 * Pi0_p / R**2 )
+	    E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 ) + tauIC / r0 * ( (P0_R * Ps0_Z - P0_Z * Ps0_R) / R + F0 * P0_p / R**2 )  )
 #else
 	    E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * zj0 ) + 2.d0*tauIC / r0 * ( (Pi0_R * Ps0_Z - Pi0_Z * Ps0_R) / R + F0 * Pi0_p / R**2 )
 #endif
 
-!  keep which expression of E_par?
+! E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 )  ) + 2.d0*tauIC / r0 * ( (Pi0_R * Ps0_Z - Pi0_Z * Ps0_R) / R + F0 * Pi0_p / R**2 )
 
-#ifdef WITH_Refluid
-	    E_par = - F0/sqrt(BB2) * ( eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 ) + tauIC / r0 * ( (P0_R * Ps0_Z - P0_Z * Ps0_R) / R + F0 * P0_p / R**2 )  )
-#endif
+
 
 #ifdef WITH_impurities
     ne_SI_re = ne_SI
