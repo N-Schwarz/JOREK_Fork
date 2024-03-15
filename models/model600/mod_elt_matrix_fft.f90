@@ -1281,10 +1281,6 @@ do i=1,n_vertex_max
               dLradDrays_dT = dLradDrays_dT / 2.d0
               dLradDcont_dT = dLradDcont_dT / 2.d0
             endif
-    
-            !--------------------------------------------------------
-            ! --- Source of neutrals, e.g. from MGI/SPI
-            !--------------------------------------------------------
       
             source_neutral       = 0.d0; source_neutral_arr       = 0.d0
             source_neutral_drift = 0.d0; source_neutral_drift_arr = 0.d0
@@ -1292,7 +1288,9 @@ do i=1,n_vertex_max
             if (with_impurities) then ! If with_impurities, we have to use the mixed pellet ablation laws and extract the neutral hydrogen isotope ablation rate
               source_imp       = 0.d0; source_imp_arr       = 0.d0
               source_imp_drift = 0.d0; source_imp_drift_arr = 0.d0
-              call total_imp_source(x_g(ms,mt),y_g(ms,mt),phi,ps0,source_neutral_arr,source_imp_arr,m_i_over_m_imp,index_main_imp, source_neutral_drift_arr, source_imp_drift_arr)
+              call total_imp_source(x_g(ms,mt),y_g(ms,mt),phi,ps0,source_neutral_arr, &
+                                    source_imp_arr,m_i_over_m_imp,index_main_imp,     &
+                 		    source_neutral_drift_arr, source_imp_drift_arr)
             else
               call total_neutral_source(x_g(ms,mt),y_g(ms,mt),phi,ps0,source_neutral_arr,source_neutral_drift_arr)
             endif
@@ -1326,9 +1324,7 @@ do i=1,n_vertex_max
           endif  ! with_neutrals
           ! ------------
                  
-          !------------------------------------------------------------------------------------------
-          ! ---Calculate energy teleported in JOREK unit (sink at R and source at R + drift_distance)
-          !------------------------------------------------------------------------------------------
+          ! --- Calculate energy teleported in JOREK unit (sink at R and source at R + drift_distance)
           ! Input energy_teleported is in eV
           power_dens_teleport_ju = 0.d0; power_dens_teleport_ju_arr = 0.d0
           do i_inj = 1,n_inj
@@ -1340,15 +1336,20 @@ do i=1,n_vertex_max
           end do
 
           ! --- Source of impurities (e.g. from MGI or SPI) and main ions (e.g. for mixed SPI)
-          if (.not. (with_neutrals .and. with_impurities)) then ! if with_neutrals and with_impurities we should already have called this once above
+
+          if (.not. (with_neutrals .and. with_impurities)) then ! if with_neutrals and with_impurities we should already have called this above
             source_imp       = 0.d0; source_imp_arr       = 0.d0
             source_imp_drift = 0.d0; source_imp_drift_arr = 0.d0
           endif
 
           source_bg        = 0.d0; source_bg_arr       = 0.d0
           source_bg_drift  = 0.d0; source_bg_drift_arr = 0.d0
+	  
           if (with_impurities) then
-            if (.not. with_neutrals) call total_imp_source(x_g(ms,mt),y_g(ms,mt),phi,ps0,source_bg_arr,source_imp_arr,m_i_over_m_imp,index_main_imp, source_bg_drift_arr, source_imp_drift_arr) ! if with_neutrals and with_impurities we should already have called this once above
+            if (.not. with_neutrals) call total_imp_source(x_g(ms,mt),y_g(ms,mt),phi,ps0,source_bg_arr,  &
+                                                           source_imp_arr,m_i_over_m_imp,index_main_imp, &
+                                                           source_bg_drift_arr, source_imp_drift_arr) 
+                                     ! if with_neutrals and with_impurities we should already have called this above
 
             do i_inj = 1,n_inj
               source_imp       = source_imp + source_imp_arr(i_inj)
@@ -1356,6 +1357,7 @@ do i=1,n_vertex_max
               source_bg        = source_bg  + source_bg_arr(i_inj)
               source_bg_drift  = source_bg_drift + source_bg_drift_arr(i_inj)
             end do
+
             ! This is to detect N/A
             if (source_imp /= source_imp .or. source_bg /= source_bg) then
               write(*,*) "WARNING: source_imp = ", source_imp
@@ -1367,43 +1369,41 @@ do i=1,n_vertex_max
               write(*,*) "WARNING: source_bg_drift = ", source_bg_drift
               stop
             end if
+	    
             source_imp       = max(source_imp,0.d0)
             source_bg        = max(source_bg,0.d0)
             source_imp_drift = max(source_imp_drift,0.d0)
             source_bg_drift  = max(source_bg_drift,0.d0)
+
           endif
+
           source_imp       = source_imp + constant_imp_source
           source_imp_drift = source_imp_drift + constant_imp_source
+
+          ! --- For uniform injection of impurities or main ions           
+          source_imp_flat = 0.d0
+          particle_source_flat(ms,mt) = 0.d0
+          do iflat=1,3
+          ! Impurity source that increases linearly in time
+            if ( with_impurities .and. ( t_now .gt. imp_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (imp_inj_flat(iflat)%start_time + imp_inj_flat(iflat)%rise_time) )  )  then
+              source_imp_flat = imp_inj_flat(iflat)%density_rise / (central_density*1.d20 * m_i_over_m_imp) 
+              source_imp_flat = source_imp_flat / imp_inj_flat(iflat)%rise_time
+            endif
+          ! Main ion density source that increases linearly in time 
+            if ( ( t_now .gt. deut_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (deut_inj_flat(iflat)%start_time + deut_inj_flat(iflat)%rise_time) )  )  then
+              particle_source_flat(ms,mt) = deut_inj_flat(iflat)%density_rise  / (central_density*1.d20 )
+              particle_source_flat(ms,mt) = particle_source_flat(ms,mt) / deut_inj_flat(iflat)%rise_time
+            endif
+          end do
+          source_imp = source_imp + source_imp_flat
+          particle_source(ms,mt) = particle_source(ms,mt) + particle_source_flat(ms,mt)
 
           ! --- Construction of radiative terms, using ADAS (by default)
           call construct_radiation_parameters()
 
           ! For shock capturing stabilization
           tau_sc = 0.d0
-          if (use_sc) call calculate_sc_quantities()
-          
-            
-           !####################################################################
-           !# For uniform 1st and 2nd injection of Impurities or Deuterium ions
-           !####################################################################
-           
-           source_imp_flat = 0.d0
-           particle_source_flat(ms,mt) = 0.d0
-           do iflat=1,3
-           ! Impurity source that increases linearly in time from 0 to , is activated over a time window of dt_imp_1stinj
-             if ( with_impurities .and. ( t_now .gt. imp_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (imp_inj_flat(iflat)%start_time + imp_inj_flat(iflat)%rise_time) )  )  then
-               source_imp_flat = imp_inj_flat(iflat)%density_rise / (central_density*1.d20 * m_i_over_m_imp) 
-               source_imp_flat = source_imp_flat / imp_inj_flat(iflat)%rise_time
-             endif
-           ! Deuterium density source that increases linearly in time from 0 to , is activated over a time window of 106JU (~ 0.7ms)
-             if ( ( t_now .gt. deut_inj_flat(iflat)%start_time ) .and. ( t_now .lt. (deut_inj_flat(iflat)%start_time + deut_inj_flat(iflat)%rise_time) )  )  then
-               particle_source_flat(ms,mt) = deut_inj_flat(iflat)%density_rise  / (central_density*1.d20 )
-               particle_source_flat(ms,mt) = particle_source_flat(ms,mt) / deut_inj_flat(iflat)%rise_time
-             endif
-           end do
-           source_imp = source_imp + source_imp_flat
-           particle_source(ms,mt) = particle_source(ms,mt) + particle_source_flat(ms,mt)
-
+          if (use_sc) call calculate_sc_quantities()                    
 
   BB2 = (F0*F0 + ps0_x * ps0_x + ps0_y * ps0_y )/BigR**2 
  
