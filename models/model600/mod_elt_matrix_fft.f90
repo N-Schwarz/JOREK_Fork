@@ -1096,7 +1096,7 @@ do i=1,n_vertex_max
             dalpha_e_dT = 0.d0
           endif
 
-
+          
           ! --- Normalized coulomb logarithm for resistivity
           call coulomb_log_ei(T_or_Te, T_or_Te_corr, r0, r0_corr, rimp0, rimp0_corr, alpha_e, lnA, dalpha_e_dT, &
                               dlnA_dT, d2lnA_dT2, dlnA_dr0, dlnA_drimp0)
@@ -5681,11 +5681,14 @@ implicit none
   ! Avalanche source
   !*********************************
   
-  Clog0 = 14.9d0 - 0.5d0 * log( ne_SI * 1.d-20 ) + log( Te_corr_eV * 1.d-3 )
-  Clogc = 14.6d0 + 0.5d0 * log ( Te_corr_eV / (ne_SI * 1.d-20) )
+  ! Thermal and Relativistic Coulomb logarithms
+  call coulomb_log_ee_thermal(Te_corr_eV, ne_SI/(1.d20 * central_density), Clog0)
+  call coulomb_log_ee_relativistic(Te_corr_eV, ne_SI/(1.d20 * central_density), Clogc)
+
   Epar0 = - F0/sqrt(BB2) * eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 )
   Epar0 = Epar0 / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
-  Ecrit = (ne_SI * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
+  call E_Cr(Te_corr_eV, ne_SI/(1.d20 * central_density), Ecrit)
+  Ecrit = Ecrit / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
   if (with_impurities) then
     ne_total_si = ne_total_si + central_density*1.d20 * ( alpha_e * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
@@ -5765,8 +5768,7 @@ implicit none
     !Clogee = Clogc + log( sqrt(gamma_of_pstar - 1.d0) )
     !Clogei = Clogc + log( sqrt(2.d0) * pstar_old )  
     gamma_of_pstar = sqrt(1.d0 + pstar_old**2)
-    Clogee = Clog0 + 0.2d0 * log ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG)   )**2.5d0 )
-    dClogee_dpstar = 0.2d0 / ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG)   )**2.5d0 ) * 2.5d0 * ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG)   )**1.5d0  * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG) * pstar_old / gamma_of_pstar
+    call coulomb_log_ee(Te_corr_eV, ne_SI/(1.d20 * central_density), pstar_old, Clogee, dClogee_dpstar)
     Clogei = Clog0 + 0.2d0 * log ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV * EL_CHG)   )**5.d0 )
     dClogei_dpstar = 0.2d0 / ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV * EL_CHG)   )**5.d0 )  *  (2.d0 * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG) ) ** 2.5d0  *  ( 5.d0 * pstar_old**4)
     beta_of_pstar = pstar_old**2 / (1.d0 + pstar_old**2)

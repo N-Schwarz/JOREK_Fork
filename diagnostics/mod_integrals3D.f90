@@ -1064,17 +1064,17 @@ do ife = ife_min, ife_max
 #endif
 
 #if (!defined WITH_TiTe)
-  Clog0 = 14.9d0 - 0.5d0 * log( ne_SI_re * 1.d-20 ) + log( Te_corr_eV_temp * 1.d-3 )
-  !Clog0 = 14.9d0 - 0.5d0 * log( ne_SI_re * 1.d-20 )
-  !Clog0 = Clog0 + log( Te_corr_eV_temp * 1.d-3 )
-  Clogc = 14.6d0 + 0.5d0 * log ( Te_corr_eV_temp / (ne_SI_re * 1.d-20) )
+  call coulomb_log_ee_thermal(Te_corr_eV_temp, ne_SI_re/(1.d20*central_density), Clog0)
+  call coulomb_log_ee_relativistic(Te_corr_eV_temp, ne_SI_re/(1.d20*central_density), Clogc)
   Epar0 =  E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
-  Ecrit = (ne_SI_re * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
+  call E_Cr(Te_corr_eV_temp, ne_SI_re/(1.d20*central_density), Ecrit)
+  Ecrit = Ecrit / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)  
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
 #ifdef WITH_impurities
     ne_total_si = ne_total_si + central_density*1.d20 * ( beta_imp * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
 #endif
-  Ec_tot = (ne_total_si * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
+  call E_Cr(Te_corr_eV_temp, ne_total_si/(1.d20*central_density), Ec_tot)
+  Ec_tot = Ec_tot / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)  
   
   ! Contribution from neutral deuterium
   sum1 = ( central_density*1.d20 * rn0 / ne_SI_re ) * float( 1 - 0 )

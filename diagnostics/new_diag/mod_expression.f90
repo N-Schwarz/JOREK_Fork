@@ -1546,19 +1546,14 @@ max_pstariter = 80
               Vneo   = aki_neo_const / Btheta * 2.d0*tauIC * ( ps0_R*Ti0_R + ps0_Z*Ti0_Z )
             end if
           end if
-          
-          ! --- Coulomb logarithms calculated according to Ref. [L. Hesselow et al, J Plasma Phys 84,
-          !     p. 905840605 (2018); doi:10.1017/S0022377818001113] Eq. (2.7) and (2.9):
-          Te0_eV     = Te0_corr / ( EL_CHG * MU_ZERO * central_density * 1.d20 )
-          ne0_20     = max(1.d-8, r0) * central_density
-          ln_Lambda0 = 14.9 - 0.5 * log( ne0_20 ) + log( Te0_eV / 1000.d0 ) ! Eq. (2.7) at thermal speeds
-          ln_Lambda  = 14.6 + 0.5 * log( Te0_eV / ne0_20 )                  ! Eq. (2.9) at relativistic energies
-          
 
+          ! Thermal and Relativistic electron Coulomb logarithm
+          call coulomb_log_ee_thermal(Te0_corr, r0, ln_Lambda0)
+          call coulomb_log_ee_relativistic(Te0_corr, r0, ln_Lambda)
           
-          E_crit = C_LIGHT**2 * EL_CHG**3 * ln_Lambda * MU_ZERO**2.5 * (central_density*1.d20*central_mass*MASS_PROTON)**1.5 * r0 / ( 4 * PI * MASS_ELECTRON * MASS_PROTON * central_mass )
-          
-          E_dreicer = EL_CHG**3 * ln_Lambda0 * MU_ZERO**1.5 * (central_density*1.d20*central_mass*MASS_PROTON)**2.5 * r0 / ( 2.d0 * PI * EPS_ZERO**2 * (MASS_PROTON*central_mass)**2 * T0 )
+          ! Critical and Dreicer Electric fields
+          call E_Cr(Te0_corr, r0, E_crit)
+          call E_Dr(Te0_corr, r0, E_dreicer)
           
 #if JOREK_MODEL >= 303
           if (bootstrap) then
@@ -1718,16 +1713,17 @@ max_pstariter = 80
     Z_eff_temp = 1.d0
     Te_corr_eV_temp = Te0_corr/(EL_CHG*MU_ZERO*central_density*1.d20)  ! Te in eV
 #endif
- 
-  Clog0 = 14.9d0 - 0.5d0 * log( ne_SI_re * 1.d-20 ) + log( Te_corr_eV_temp * 1.d-3 )
-  Clogc = 14.6d0 + 0.5d0 * log ( Te_corr_eV_temp / (ne_SI_re * 1.d-20) )
+  call coulomb_log_ee_thermal(Te0_corr, ne_SI_re/(1.d20 *central_density), Clog0)
+  call coulomb_log_ee_relativistic(Te0_corr, ne_SI_re/(1.d20 *central_density), Clogc)
+  call E_Cr(Te0_corr, ne_SI_re/(1.d20 *central_density), E_crit)
   Epar0 = E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
-  Ecrit = (ne_SI_re * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
+  Ecrit = E_crit / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
 #ifdef WITH_impurities
     ne_total_si = ne_total_si + central_density*1.d20 * ( beta_imp * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
 #endif
-  Ec_tot = (ne_total_si * EL_CHG**3 * Clogc) / ( 4.d0 * PI * EPS_ZERO**2 * MASS_ELECTRON * SPEED_OF_LIGHT**2 )
+  call E_Cr(Te0_corr, ne_total_si/(1.d20 *central_density), Ec_tot)
+  Ec_tot = Ec_tot / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units 
   
   ! Contribution from neutral deuterium
   sum1 = ( central_density*1.d20 * rn0 / ne_SI_re ) * float( 1 - 0 )
@@ -1802,8 +1798,7 @@ max_pstariter = 80
     !Clogee = Clogc + log( sqrt(gamma_of_pstar - 1.d0) )
     !Clogei = Clogc + log( sqrt(2.d0) * pstar_old )  
     gamma_of_pstar = sqrt(1.d0 + pstar_old**2)
-    Clogee = Clog0 + 0.2d0 * log ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG)   )**2.5d0 )
-    dClogee_dpstar = 0.2d0 / ( 1.d0 + ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG)   )**2.5d0 ) * 2.5d0 * ( (gamma_of_pstar - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG)   )**1.5d0  * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG) * pstar_old / gamma_of_pstar
+    call coulomb_log_ee(Te_corr_eV_temp, ne_SI_re/(1.d20 *central_density), pstar_old, Clogee, dClogee_dpstar)
     Clogei = Clog0 + 0.2d0 * log ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV_temp * EL_CHG)   )**5.d0 )
     dClogei_dpstar = 0.2d0 / ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV_temp * EL_CHG)   )**5.d0 )  *  (2.d0 * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG) ) ** 2.5d0  *  ( 5.d0 * pstar_old**4)
     beta_of_pstar = pstar_old**2 / (1.d0 + pstar_old**2)
