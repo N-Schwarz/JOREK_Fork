@@ -137,19 +137,19 @@ module mod_plasma_functions
 
     implicit none
 
-    real*8, intent(in)             :: r0                   !< total ion mass 
+    real*8, intent(in)             :: r0                   !< total ion mass density
     real*8, intent(in)             :: T                    !< electron temperature 
-    real*8            :: Te_eV
-    real*8            :: ne_20
-    real*8, intent(out)             :: ln_Lambda0
+    real*8                         :: Te_eV
+    real*8                         :: ne_20
+    real*8, intent(out)            :: ln_Lambda0
 
-    ! --- Coulomb logarithm calculated according to Ref. [L. Hesselow et al, J Plasma Phys 84,
+    ! --- Coulomb logarithm calculated according to Ref. [L. Hesslow et al, J Plasma Phys 84,
     !     p. 905840605 (2018); doi:10.1017/S0022377818001113] Eq. (2.7):
     Te_eV     = T / (EL_CHG*MU_ZERO*central_density*1.d20) 
     ne_20     = max(1.d-8, r0) * central_density
     ln_Lambda0 = 14.9 - 0.5 * log( ne_20 ) + log( Te_eV / 1000.d0 ) ! Eq. (2.7) at thermal speed
   
-    end subroutine coulomb_log_ee_thermal
+  end subroutine coulomb_log_ee_thermal
  
 
 
@@ -161,47 +161,47 @@ module mod_plasma_functions
 
     implicit none
 
-    real*8, intent(in)             :: r0                   !< total ion mass 
+    real*8, intent(in)             :: r0                   !< total ion mass density
     real*8, intent(in)             :: T                    !< electron temperature 
-    real*8            :: Te_eV
-    real*8            :: ne_20
-    real*8, intent(out)             :: ln_LambdaC
+    real*8                         :: Te_eV
+    real*8                         :: ne_20
+    real*8, intent(out)            :: ln_LambdaC
 
-    ! --- Coulomb logarithm calculated according to Ref. [L. Hesselow et al, J Plasma Phys 84,
+    ! --- Coulomb logarithm calculated according to Ref. [L. Hesslow et al, J Plasma Phys 84,
     !     p. 905840605 (2018); doi:10.1017/S0022377818001113] Eq. (2.9):
     Te_eV     = T / ( EL_CHG * MU_ZERO * central_density * 1.d20 )
     ne_20     = max(1.d-8, r0) * central_density
     ln_LambdaC  = 14.9 - 0.5 * log( ne_20 ) + log( Te_eV / 1000.d0 ) + 0.5*log(510.999*1.d3/Te_eV)                ! Eq. (2.9) at relativistic energy 
   
-    end subroutine coulomb_log_ee_relativistic
+  end subroutine coulomb_log_ee_relativistic
 
 
 
 
 
 
-  !> Determine Coulomb logartihm describing electron-electron collisions
+  !> Determine Coulomb logartihm describing electron-electron collisions (valide for both thermal and relativistic domains)
   pure subroutine coulomb_log_ee(T, r0, pstar, ln_Lambda_ee, dln_Lambda_ee_dpstar)
 
     implicit none
 
-    real*8, intent(in)             :: r0                   !< total ion mass 
+    real*8, intent(in)             :: r0                   !< total ion mass density
     real*8, intent(in)             :: T                    !< electron temperature 
     real*8, intent(in)             :: pstar                !< Normalized momentum (=p/mc)
-    real*8            :: Te_eV
-    real*8            :: ne_20
-    real*8            :: ln_Lambda0 
-    real*8            :: gamma
-    real*8, intent(out)             :: ln_Lambda_ee
-    real*8, optional, intent(out)   :: dln_Lambda_ee_dpstar              !< 1st derivative with respect to the pstar 
+    real*8                         :: Te_eV
+    real*8                         :: ne_20
+    real*8                         :: ln_Lambda0 
+    real*8                         :: gamma
+    real*8, intent(out)            :: ln_Lambda_ee
+    real*8, optional, intent(out)  :: dln_Lambda_ee_dpstar !< 1st derivative with respect to the pstar 
 
-    ! --- Coulomb logarithm calculated according to Ref. [L. Hesselow et al, J Plasma Phys 84,
+    ! --- Coulomb logarithm calculated according to Ref. [L. Hesslow et al, J Plasma Phys 84,
     !     p. 905840605 (2018); doi:10.1017/S0022377818001113] Eq. (2.7):
     Te_eV     = T / ( EL_CHG * MU_ZERO * central_density * 1.d20 )
     ne_20     = max(1.d-8, r0) * central_density
     ln_Lambda0 = 14.9 - 0.5 * log( ne_20 ) + log( Te_eV / 1000.d0 ) ! Eq. (2.7) at thermal speed
     
-    ! --- Coulomb logarithm calculated according to Ref. [L. Hesselow et al, J Plasma Phys 84,
+    ! --- Coulomb logarithm calculated according to Ref. [L. Hesslow et al, J Plasma Phys 84,
     !     p. 905840605 (2018); doi:10.1017/S0022377818001113] Eq. (2.10) with k=5:
     gamma = sqrt(1.d0 + pstar**2)
     ln_Lambda_ee = ln_Lambda0 + 0.2d0 * log ( 1.d0 + ( (gamma - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_eV * EL_CHG)   )**2.5d0 )   ! Eq. (2.10) (with k=5)
@@ -211,7 +211,7 @@ module mod_plasma_functions
       dln_Lambda_ee_dpstar = 0.2d0 / ( 1.d0 + ( (gamma - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_eV * EL_CHG)   )**2.5d0 ) * 2.5d0 * ( (gamma - 1.d0) * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_eV * EL_CHG)   )**1.5d0  * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_eV * EL_CHG) * pstar / gamma
     endif
 
-    end subroutine coulomb_log_ee
+  end subroutine coulomb_log_ee
 
 
 
@@ -488,21 +488,20 @@ module mod_plasma_functions
 
 
 
-!> Determine the Dreicer ELectric Field (input/output in JOREK units)
-! No option on corrected ion mass and temperetaure implemented yet <!>
-pure subroutine E_Dr(T, r0, E_dreic)
+  !> Determine the Dreicer eLectric field (input/output in JOREK units)
+  ! No option on corrected ion mass and temperature implemented yet <!>
+  pure subroutine E_Dr(T, r0, E_dreic)  
 
     implicit none
     
-    real*8, intent(in)             :: r0                   !< total ion mass 
+    real*8, intent(in)             :: r0                   !< total ion mass density
     real*8, intent(in)             :: T                    !< electron temperature 
-    real*8, intent(out)            :: E_dreic              !< Dreicer Electric Field
-
     real*8                         :: Te_eV
     real*8                         :: ne_20
     real*8                         :: ln_Lambda0
+    real*8, intent(out)            :: E_dreic              !< Dreicer electric field
 
-    ! --- Coulomb logarithm calculated according to Ref. [L. Hesselow et al, J Plasma Phys 84,
+    ! --- Coulomb logarithm calculated according to Ref. [L. Hesslow et al, J Plasma Phys 84,
     !     p. 905840605 (2018); doi:10.1017/S0022377818001113] Eq. (2.7):
     Te_eV     = T / (EL_CHG*MU_ZERO*central_density*1.d20) 
     ne_20     = max(1.d-8, r0) * central_density
@@ -518,21 +517,20 @@ pure subroutine E_Dr(T, r0, E_dreic)
 
 
 
-!> Determine the Critical ELectric Field (input/output in JOREK units)
-! No option on corrected ion mass and temperetaure implemented yet <!>
-pure subroutine E_Cr(T, r0, E_crit)
+  !> Determine the Critical eLectric field (input/output in JOREK units)
+  ! No option on corrected ion mass and temperature implemented yet <!>
+  pure subroutine E_Cr(T, r0, E_crit)
 
     implicit none
     
-    real*8, intent(in)             :: r0                   !< total ion mass 
+    real*8, intent(in)             :: r0                   !< total ion mass density
     real*8, intent(in)             :: T                    !< electron temperature 
-    real*8, intent(out)            :: E_crit               !< Critical Electric Field
-
     real*8                         :: Te_eV
     real*8                         :: ne_20
     real*8                         :: ln_LambdaC
+    real*8, intent(out)            :: E_crit               !< Critical electric field
 
-    ! --- Coulomb logarithm calculated according to Ref. [L. Hesselow et al, J Plasma Phys 84,
+    ! --- Coulomb logarithm calculated according to Ref. [L. Hesslow et al, J Plasma Phys 84,
     !     p. 905840605 (2018); doi:10.1017/S0022377818001113] Eq. (2.9):
     Te_eV     = T / ( EL_CHG * MU_ZERO * central_density * 1.d20 )
     ne_20     = max(1.d-8, r0) * central_density
