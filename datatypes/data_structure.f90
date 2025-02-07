@@ -7,38 +7,48 @@ module data_structure
   use gauss
   use ISO_C_BINDING, ONLY : C_INT, C_DOUBLE
   use mod_sparse_matrix, only: type_SP_MATRIX
-
-  
   implicit none
 
   type type_node                                  !< type definition of a node (i.e. a vertex)
-    real*8     :: x(n_coord_tor,n_degrees,n_dim)        !< x,y,z coordinates of points and additional nodal geometry
-    real*8     :: values(n_tor,n_degrees,n_var)   !< Variable values and derivatives
-    real*8     :: deltas(n_tor,n_degrees,n_var)   !< Change of variable values and derivatives in last timestep
-#ifdef fullmhd
-    real*8     :: psi_eq(n_degrees)               !< equilibrium flux at the nodes
-    real*8     :: Fprof_eq(n_degrees)             !< equilibrium profile R*B_phi at the nodes
-#elif altcs
-    real*8     :: psi_eq(n_degrees)               !< equilibrium flux at the nodes
+  
+  real*8     :: x(n_coord_tor,n_degrees,n_dim)        !< x,y,z coordinates of points and additional nodal geometry
+  real*8, dimension(:,:,:), allocatable  :: values   !< Variable values and derivatives
+  real*8, dimension(:,:,:), allocatable  :: deltas   !< Change of variable values and derivatives in last timestep
+#if STELLARATOR_MODEL
+  real*8     :: r_tor_eq(n_degrees)                     !< radial coordinate from GVEC (square root of normalised toroidal flux)
+#if JOREK_MODEL == 180
+  real*8     :: pressure(n_degrees)                     !< scalar pressure from GVEC
+  real*8     :: j_field(n_coord_tor,n_degrees,n_dim+1)  !< current density R, Z, phi components from GVEC
+  real*8     :: b_field(n_coord_tor,n_degrees,n_dim+1)  !< magnetic field  R, Z, phi components from GVEC
 #endif
-    integer    :: index(n_degrees)                !< index in the main matrix
-    integer    :: boundary                        !< = 1, 2 or 3 for boundary nodes.
-                                                  !< For wall-aligned grids, check routine update_boundary_types_final
-                                                  !< in grids/grid_utils/update_boundary_types.f90
-    integer    :: boundary_index                  !< index of the boundary node 
-    logical    :: axis_node                       !< Flag nodes that are on the axis (and can/need-to-be be stabilised)
-    integer    :: axis_dof                        !< which dof to enforce to zero
-    integer    :: parents(2)                      !< Parent nodes (used if node is constrained)"refinement"
-    integer    :: parent_elem                     !< which element do parent nodes belong to ? "refinement"
-    real*8     :: ref_lambda, ref_mu              !< Local coordinates of node inside the parent element. "refinement"
-    logical    :: constrained                     !< Constrained node or not..."refinement"
-    
-  end type type_node
+#ifndef USE_DOMM
+  real*8     :: chi_correction(n_coord_tor,n_degrees)   !< correction to the vacuum magnetic field
+#endif 
+  real*8     :: j_source(n_tor,n_degrees)               !< Current source in a stellarator
+#elif fullmhd
+  real*8     :: psi_eq(n_degrees)               !< equilibrium flux at the nodes
+  real*8     :: Fprof_eq(n_degrees)             !< equilibrium profile R*B_phi at the nodes
+#elif altcs
+  real*8     :: psi_eq(n_degrees)               !< equilibrium flux at the nodes
+#endif
+  integer    :: index(n_degrees)                !< index in the main matrix
+  integer    :: boundary                        !< = 1, 2 or 3 for boundary nodes.
+                                                !< For wall-aligned grids, check routine update_boundary_types_final
+                                                !< in grids/grid_utils/update_boundary_types.f90
+  integer    :: boundary_index                  !< index of the boundary node 
+  logical    :: axis_node                       !< Flag nodes that are on the axis (and can/need-to-be be stabilised)
+  integer    :: axis_dof                        !< which dof to enforce to zero
+  integer    :: parents(2)                      !< Parent nodes (used if node is constrained)"refinement"
+  integer    :: parent_elem                     !< which element do parent nodes belong to ? "refinement"
+  real*8     :: ref_lambda, ref_mu              !< Local coordinates of node inside the parent element. "refinement"
+  logical    :: constrained                     !< Constrained node or not..."refinement"
+  
+end type type_node
 
-  type type_node_list                             !< type definition of a list of nodes
-    integer            :: n_nodes                 !< the number of nodes in the list
-    integer            :: n_dof                   !< the total number of degrees of freedom
-    type (type_node)   :: node(n_nodes_max)       !< an allocatable list of nodes
+  type type_node_list                                                        !< type definition of a list of nodes
+    integer                                       :: n_nodes                 !< the number of nodes in the list
+    integer                                       :: n_dof                   !< the total number of degrees of freedom
+    type (type_node), dimension(:), allocatable   :: node                    !< an allocatable list of nodes
     
   end type type_node_list
 
@@ -52,6 +62,9 @@ module data_structure
     integer :: sons(4)                            !< Sons of the element (=0 if no son)"refinement"
     integer :: contain_node(5)                    !< nodes belonging to the element"refinement"
     integer :: nref                               !< How the element has been refined (if so)"refinement"
+#if STELLARATOR_MODEL
+    real*8,dimension(:,:,:,:,:,:),allocatable :: chi       !< Vacuum field potential chi on Gaussian points
+#endif
   end type type_element
 
   type type_element_list                          !< type definition for a list of elements
@@ -115,9 +128,9 @@ module data_structure
      real*8, dimension (:)    , allocatable :: RHS2
 
      real*8, dimension(:,:,:,:) , allocatable :: eq_g, eq_s, eq_t
-     real*8, dimension(:,:,:,:) , allocatable :: eq_p, eq_pp
-     real*8, dimension(:,:,:,:) , allocatable:: eq_ss, eq_st, eq_tt   
-     real*8, dimension(:,:,:,:) , allocatable :: delta_g, delta_s, delta_t
+     real*8, dimension(:,:,:,:) , allocatable :: eq_p, eq_pp, eq_sp, eq_tp
+     real*8, dimension(:,:,:,:) , allocatable :: eq_ss, eq_st, eq_tt   
+     real*8, dimension(:,:,:,:) , allocatable :: delta_g, delta_s, delta_t, delta_p
 
      real*8, dimension(:), allocatable  :: synch_buff
   END TYPE type_thread_buffer
@@ -208,6 +221,90 @@ module data_structure
   
 contains
 
+  !> wrapper function for correctly initializing a node object
+  subroutine init_node(node, n_values)
+    implicit none
+    type(type_node), intent(inout)    :: node       !< the node to be initialized
+    integer, intent(in)               :: n_values   !< number of values to be stored in node
+    
+    if (allocated(node%values)) deallocate(node%values)
+    if (allocated(node%deltas)) deallocate(node%deltas)
+
+    allocate(node%values(n_tor, n_degrees, n_values))
+    allocate(node%deltas(n_tor, n_degrees, n_values))
+
+  end subroutine init_node
+
+  !> wrapper function for correct initializing a node_list object
+  subroutine init_node_list(node_list, n_nodes, n_dof, n_values)
+    implicit none
+    type(type_node_list), intent(inout)  :: node_list
+    integer, intent(in)                  :: n_nodes
+    integer, intent(in)                  :: n_dof
+    integer, intent(in)                  :: n_values
+    integer                              :: i
+
+    node_list%n_nodes = n_nodes
+    node_list%n_dof = n_dof
+    
+    if (allocated(node_list%node)) call dealloc_node_list(node_list)
+    allocate(node_list%node(n_nodes))
+
+    do i=1, n_nodes
+      call init_node(node_list%node(i), n_values)
+    enddo
+
+  end subroutine init_node_list
+
+  !> wrapper function for correctly deallocating a node object
+  subroutine dealloc_node(node)
+    implicit none
+    type(type_node), intent(inout)    :: node       !< the node to have its values array deallocated
+
+    if (allocated(node%values)) then
+      deallocate(node%values)
+      deallocate(node%deltas)
+    endif
+
+  end subroutine dealloc_node
+
+  !> wrapper function for correct deallocating a node_list object
+  subroutine dealloc_node_list(node_list)
+    implicit none
+    type(type_node_list), intent(inout)  :: node_list
+
+    deallocate(node_list%node)
+
+  end subroutine dealloc_node_list
+
+  !> creates a deep copy of a node
+  subroutine make_deep_copy_node(node_to_copy, node_copied_to)
+    implicit none
+    type(type_node), intent(in)      :: node_to_copy
+    type(type_node), intent(inout)   :: node_copied_to
+
+    call init_node(node_copied_to, size(node_to_copy%values, 3))
+
+    node_copied_to = node_to_copy
+    node_copied_to%values = node_to_copy%values
+    node_copied_to%deltas = node_to_copy%deltas
+
+  end subroutine make_deep_copy_node
+
+
+  subroutine make_deep_copy_node_list(node_list_to_copy, node_list_copied_to)
+    implicit none
+    type(type_node_list), intent(in)      :: node_list_to_copy
+    type(type_node_list), intent(inout)   :: node_list_copied_to
+    integer                               :: i
+
+    do i=1, node_list_to_copy%n_nodes
+      call make_deep_copy_node(node_list_to_copy%node(i), node_list_copied_to%node(i))
+    enddo
+
+  end subroutine make_deep_copy_node_list
+
+
   subroutine init_threads()
 #ifdef _OPENMP
     use omp_lib
@@ -258,9 +355,12 @@ contains
           call tr_allocate(thread_struct(i)%eq_st  ,1,n_plane,1,n_var,1,n_gauss,1,n_gauss,"eq_st",CAT_MATELEM)
           call tr_allocate(thread_struct(i)%eq_tt  ,1,n_plane,1,n_var,1,n_gauss,1,n_gauss,"eq_tt",CAT_MATELEM)
           call tr_allocate(thread_struct(i)%eq_pp  ,1,n_plane,1,n_var,1,n_gauss,1,n_gauss,"eq_pp",CAT_MATELEM) 
+          call tr_allocate(thread_struct(i)%eq_sp  ,1,n_plane,1,n_var,1,n_gauss,1,n_gauss,"eq_sp",CAT_MATELEM) 
+          call tr_allocate(thread_struct(i)%eq_tp  ,1,n_plane,1,n_var,1,n_gauss,1,n_gauss,"eq_tp",CAT_MATELEM) 
           call tr_allocate(thread_struct(i)%delta_g,1,n_plane,1,n_var,1,n_gauss,1,n_gauss,"delta_g",CAT_MATELEM) 
           call tr_allocate(thread_struct(i)%delta_s,1,n_plane,1,n_var,1,n_gauss,1,n_gauss,"delta_s",CAT_MATELEM)
           call tr_allocate(thread_struct(i)%delta_t,1,n_plane,1,n_var,1,n_gauss,1,n_gauss,"delta_t",CAT_MATELEM)
+          call tr_allocate(thread_struct(i)%delta_p,1,n_plane,1,n_var,1,n_gauss,1,n_gauss,"delta_p",CAT_MATELEM)
           thread_struct(i)%eq_g    = 0.d0
           thread_struct(i)%eq_s    = 0.d0
           thread_struct(i)%eq_t    = 0.d0
@@ -269,9 +369,12 @@ contains
           thread_struct(i)%eq_st   = 0.d0
           thread_struct(i)%eq_tt   = 0.d0
           thread_struct(i)%eq_pp   = 0.d0
+          thread_struct(i)%eq_sp   = 0.d0
+          thread_struct(i)%eq_tp   = 0.d0
           thread_struct(i)%delta_g = 0.d0
           thread_struct(i)%delta_s = 0.d0
           thread_struct(i)%delta_t = 0.d0
+          thread_struct(i)%delta_p = 0.d0
 #ifdef COMPARE_ELEMENT_MATRIX
           call tr_allocate(thread_struct(i)%ELM2,  1,n_tor*n_vertex_max*n_degrees*n_var,1,n_tor*n_vertex_max*n_degrees*n_var,"ELM2",CAT_MATELEM)
           call tr_allocate(thread_struct(i)%RHS2,  1,n_tor*n_vertex_max*n_degrees*n_var,"RHS2",CAT_MATELEM)
@@ -303,9 +406,12 @@ contains
        call tr_deallocate(thread_struct(i)%eq_st  ,"eq_st",CAT_MATELEM)
        call tr_deallocate(thread_struct(i)%eq_tt  ,"eq_tt",CAT_MATELEM)
        call tr_deallocate(thread_struct(i)%eq_pp  ,"eq_pp",CAT_MATELEM) 
+       call tr_deallocate(thread_struct(i)%eq_sp  ,"eq_sp",CAT_MATELEM) 
+       call tr_deallocate(thread_struct(i)%eq_tp  ,"eq_tp",CAT_MATELEM) 
        call tr_deallocate(thread_struct(i)%delta_g,"delta_g",CAT_MATELEM) 
        call tr_deallocate(thread_struct(i)%delta_s,"delta_s",CAT_MATELEM)
        call tr_deallocate(thread_struct(i)%delta_t,"delta_t",CAT_MATELEM)
+       call tr_deallocate(thread_struct(i)%delta_p,"delta_p",CAT_MATELEM)
 #ifdef COMPARE_ELEMENT_MATRIX
        call tr_deallocate(thread_struct(i)%ELM2,"ELM2",CAT_MATELEM)
        call tr_deallocate(thread_struct(i)%RHS2,"RHS2",CAT_MATELEM)

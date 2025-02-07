@@ -17,12 +17,12 @@ contains
     ! --- Modules
     use mod_parameters,           only : n_tor, jorek_model, n_vertex_max, n_degrees, unified_element_matrix
     use phys_module,              only : bc_natural_open, bc_natural_flux, n_tor_fft_thresh, grid_to_wall, n_wall_blocks, keep_n0_const
-    USE data_structure,           only : type_element, type_node, type_node_list, thread_struct
+    USE data_structure,           only : type_element, type_node, type_node_list, thread_struct, make_deep_copy_node, init_node
     use mod_boundary_matrix_open, only : boundary_matrix_open
     use mod_elt_matrix,           only : element_matrix
     use mod_elt_matrix_fft,       only : element_matrix_fft
     use mpi_mod
-
+	
     ! --- Routine parameters
     type (type_element),              intent(inout)  :: element
     type (type_node),                 intent(inout)  :: nodes(n_vertex_max)
@@ -79,6 +79,7 @@ contains
         i_tor_min, i_tor_max, aux_nodes)
     endif
     
+    
     ! --- Apply sheath boundary conditions at the targets
     if (bc_natural_open) then
       ! --- Loop over the 4 nodes
@@ -99,10 +100,11 @@ contains
         ! --- carry on only if on boundary
         if ( (bnd1 .eq. 0) .or. (bnd2 .eq. 0)) cycle
         
-        nodes(1) = node_list%node(inode1)
-        nodes(2) = node_list%node(inode2)
-        nodes(3) = node_list%node(inode3)
-        nodes(4) = node_list%node(inode4)
+        call make_deep_copy_node(node_list%node(inode1), nodes(1))
+        call make_deep_copy_node(node_list%node(inode2), nodes(2))
+        call make_deep_copy_node(node_list%node(inode3), nodes(3))
+        call make_deep_copy_node(node_list%node(inode4), nodes(4))
+
         vertex    = (/ iv, iv2 /)
         
         if ( (grid_to_wall) .and. (n_wall_blocks .gt. 0) ) then
@@ -184,7 +186,10 @@ contains
 #ifdef COMPARE_ELEMENT_MATRIX
     ! --- Comparison is performed only for one finite element
     if (ife .eq. n_local_elms/2) then
-      if (     (jorek_model .eq. 303) &
+
+      ! --- Call both routines
+      if (     (jorek_model .eq. 183) &
+          .or. (jorek_model .eq. 303) &
           .or. (jorek_model .eq. 333) &
           .or. (jorek_model .eq. 500) &
           .or. (jorek_model .eq. 710) &
@@ -198,7 +203,8 @@ contains
         thread_struct(omp_tid)%eq_t, thread_struct(omp_tid)%eq_p, thread_struct(omp_tid)%eq_ss, thread_struct(omp_tid)%eq_st, &
         thread_struct(omp_tid)%eq_tt, thread_struct(omp_tid)%delta_g, thread_struct(omp_tid)%delta_s, &
         thread_struct(omp_tid)%delta_t, i_tor_min, i_tor_max, aux_nodes, thread_struct(omp_tid)%ELM_pnn)
-      if (     (jorek_model .eq. 303) &
+      if (     (jorek_model .eq. 183) &
+          .or. (jorek_model .eq. 303) &
           .or. (jorek_model .eq. 333) &
           .or. (jorek_model .eq. 500) &
           .or. (jorek_model .eq. 710) &
@@ -337,8 +343,6 @@ subroutine construct_matrix(mhd_sim, local_elms, n_local_elms, a_mat, rhs_vec, h
   integer, allocatable              :: i_harm(:)
   integer                           :: comm, ierr, counts
   
-
-
   ! --- Timing call
   call r3_info_begin (r3_info_index_0, 'construct_matrix')
   
@@ -432,6 +436,8 @@ subroutine construct_matrix(mhd_sim, local_elms, n_local_elms, a_mat, rhs_vec, h
   if (mhd_sim%freeboundary .and. (mhd_sim%sr_n_tor /= 0 ) ) then
     call global_matrix_structure_vacuum(mhd_sim%node_list, mhd_sim%bnd_node_list, a_mat, i_tor_min=1, i_tor_max=n_tor)
   endif
+
+
  
   ! --- Declare shared and private variables for omp
   !$omp parallel default(none) &
@@ -440,13 +446,14 @@ subroutine construct_matrix(mhd_sim, local_elms, n_local_elms, a_mat, rhs_vec, h
   !$omp          a_mat, rhs_local, rhs_vec,                                                               &
   !$omp          R_xpoint,my_id,bc_natural_open,bc_natural_flux,refinement,thread_struct,n_tor_fft_thresh,     &
   !$omp          difference_found,rhs_problem,elm_problem, treat_axis) &
-  !$omp   private(ife,ielm,iv,inode,element,nodes, aux_nodes, i,inode1,i_order,index_node1, n_tor_local,   &
+  !$omp   private(ife,ielm,iv,inode,element, i,inode1,i_order,index_node1, n_tor_local,   &
   !$omp           index_large_i,j,index_ij,k,knode,k_order,index_node2,index_large_k,ijA_position,         &
   !$omp           l,index_kl,ilarge2,iv2,vertex,direction,inode2,omp_nthreads,omp_tid,                     &
-  !$omp           i_father,element_father, nodes_father, inode_father, node_out, ivertex, iorder,          &
+  !$omp           i_father,element_father, inode_father, node_out, ivertex, iorder,          &
   !$omp           ivar, itor, jvertex, jorder, jvar, jtor, random_element, n_var_reduced, v1, v2, im,      &
   !$omp           index_ij_model400_e, index_kl_model400_e,  tmp_rhs, tmp_elm, tmp_elm_v2_8,    &
-  !$omp           i_v, i_harm                                                                              )
+  !$omp           i_v, i_harm                                                                              ) &
+  !$omp  firstprivate(nodes, aux_nodes, nodes_father)
 
 ! --- omp id
 #ifdef _OPENMP
@@ -456,7 +463,7 @@ subroutine construct_matrix(mhd_sim, local_elms, n_local_elms, a_mat, rhs_vec, h
   omp_nthreads = 1
   omp_tid      = 1
 #endif
- 
+
   n_tor_local = a_mat%i_tor_max - a_mat%i_tor_min + 1
   if(treat_axis) then
      do i = 1, n_var
@@ -467,6 +474,7 @@ subroutine construct_matrix(mhd_sim, local_elms, n_local_elms, a_mat, rhs_vec, h
        i_harm(i) = i
      enddo
   endif
+
   
 ! --- Loop over local elements
   !$omp do schedule(runtime)
@@ -484,17 +492,17 @@ subroutine construct_matrix(mhd_sim, local_elms, n_local_elms, a_mat, rhs_vec, h
       if (i_father .ne. 0) then
       element_father = element_list%element(i_father)
       do iv = 1, n_vertex_max
-        inode_father=element_father%vertex(iv)
-        nodes_father(iv) = node_list%node(inode_father)
+        inode_father = element_father%vertex(iv)
+        call make_deep_copy_node(node_list%node(inode_father), nodes_father(iv))
       enddo
      endif
 
     else
        
       do iv = 1, n_vertex_max
-       inode   = element%vertex(iv)
-       nodes(iv) = node_list%node(inode)
-       aux_nodes(iv) = aux_node_list%node(inode)
+        inode   = element%vertex(iv)
+        call make_deep_copy_node(node_list%node(inode), nodes(iv))
+        call make_deep_copy_node(aux_node_list%node(inode), aux_nodes(iv))
       enddo
 
     endif
@@ -707,7 +715,11 @@ subroutine construct_matrix(mhd_sim, local_elms, n_local_elms, a_mat, rhs_vec, h
   end do
 
   !$omp end do
-
+  do iv = 1, n_vertex_max
+    call dealloc_node(nodes_father(iv))
+    call dealloc_node(nodes(iv))
+    call dealloc_node(aux_nodes(iv))
+  enddo
   !$omp end parallel
  
   ! --- Memory tracking
@@ -778,7 +790,6 @@ subroutine construct_matrix(mhd_sim, local_elms, n_local_elms, a_mat, rhs_vec, h
   call tr_deallocate(RHS_local,"RHS_local",CAT_DMATRIX)
   
   call check_if_distributed(a_mat)
-  
      
   ! --- Memory tracking
   call tr_locvnorms("cm_BCRhs",rhs_vec%val,a_mat%ng)

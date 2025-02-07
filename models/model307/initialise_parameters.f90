@@ -52,6 +52,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 tokamak_device,                                     &
                 F0,gamma_sheath,gamma_stangeby, density_reflection, &
                 mach_one_bnd_integral, Vpar_smoothing,              &
+                deuterium_adas, old_deuterium_atomic,               &
                 Vpar_smoothing_coef,                                &
                 zjz_0, zjz_1, zj_coef,                              &
                 rho_0, rho_1, rho_coef,                             &
@@ -60,21 +61,21 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 ZK_par, ZK_par_max, ZK_perp, D_par, D_perp,         &
                 particlesource, heatsource, tauIC, Wdia,            &
                 eta_num, visco_num, visco_par_num, D_perp_num,      &
-                ZK_perp_num,                                        &
+                ZK_perp_num, Dn_perp_num,                           &
                 pellet_amplitude, pellet_R, pellet_Z, pellet_phi,   &
                 pellet_radius, pellet_sig, pellet_length,           &
                 pellet_psi, pellet_delta_psi, pellet_density,       &
                 pellet_velocity_R, pellet_velocity_Z, pellet_theta, &
                 pellet_ellipse,                                     &
                 central_density, central_mass,                      &
-		pellet_particles, use_pellet,                       &
+                pellet_particles, use_pellet,                       &
                 ellip,tria_u,tria_l,quad_u,quad_l,                  &
                 xampl,xwidth,xsig,xtheta,xshift,xleft, xpoint,      &
                 forceSDN,                                           &
                 xcase, SDN_threshold, D_perp_file, ZK_perp_file,    &
                 rho_file, T_file, ffprime_file, rot_file,           &
                 normalized_velocity_profile,                        &
-                freeboundary_equil, freeboundary,  freeb_change_indices, &
+                freeboundary_equil,freeboundary,freeb_change_indices, &
                 resistive_wall,                                     &
                 wall_resistivity, wall_resistivity_fact,            &
                 bc_natural_open,                                    &
@@ -106,12 +107,12 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 V_0,V_1,V_coef, output_bnd_elements,                &
                 wall_file,                                          &
                 n_limiter, R_limiter, Z_limiter,                    &
-                first_target_point, last_target_point,		    &
+                first_target_point, last_target_point,              &
                 NEO, neo_file, aki_neo_const, amu_neo_const,        &
                 time_evol_scheme, corr_neg_temp_coef,               &
                 corr_neg_dens_coef, D_prof_neg, ZK_prof_neg,        &
                 D_prof_neg_thresh, ZK_prof_neg_thresh, T_min,rho_min,&
-				T_min_neg,rho_min_neg,implicit_heat_source,         &
+                T_min_neg, rho_min_neg, implicit_heat_source,       &
                 Number_RMP_harmonics,RMP_har_cos_spectrum,          &
                 RMP_har_sin_spectrum,                               &
                 amix, amix_freeb, equil_accuracy,                   &
@@ -136,11 +137,19 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 nsubstep_particles, restart_particles,              &
                 filter_perp,    filter_hyper,    filter_par,        &
                 filter_perp_n0, filter_hyper_n0, filter_par_n0,     &
-                use_cx, use_sputtering, use_ionisation,             &
+                use_kn_cx, use_kn_sputtering, use_kn_ionisation,    &
                 use_ncs, use_pcs, use_ccs, use_pcs_full,            &
+                restart_particles,                                  &
+                use_kn_recombination, use_kn_puffing,use_kn_line_radiation,  &
+                puff_rate, r_valve, R_valve_loc, Z_valve,           &
+                R_valve_loc2, Z_valve2, n_puff,                     &
                 cte_current_FB_fact, Z_xpoint_limit,                &
                 CARIDDI_mode, use_newton, maxNewton, gamma_Newton,  &
-                alpha_Newton, vacuum_min, strumpack_matching
+                alpha_Newton, vacuum_min, strumpack_matching,       &
+                xpoint_search_tries, export_aux_node_list,          &
+                use_manual_random_seed, manual_seed,                &
+                bgf_rpolar, bgf_tht, min_sheath_angle
+
 
 if (my_id .eq. 0) then
 
@@ -208,6 +217,7 @@ if (my_id .eq. 0) then
 
   if (sum(nstep_n) .gt. 0) then
     nstep = sum(nstep_n)
+    tstep = tstep_n(1)
   else
     tstep_n    = 0.d0
     tstep_n(1) = tstep

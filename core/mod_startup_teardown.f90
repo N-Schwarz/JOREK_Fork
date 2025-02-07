@@ -12,6 +12,7 @@ subroutine initialise(my_id, n_cpu, skip_help)
   use basis_at_gaussian
   use mod_openadas, only : read_adf11
   use mod_impurity, only : init_imp_adas
+  use mod_plasma_functions, only: initialise_reference_parameters
 
 #if ((defined WITH_Neutrals) && (!defined WITH_Impurities))
   use mod_neutral_source
@@ -95,6 +96,8 @@ subroutine initialise(my_id, n_cpu, skip_help)
   call init_imp_adas(my_id)
 #endif
 
+  ! --- Initialize derived reference parameters
+  call initialise_reference_parameters()
   
   ! --- Define the basis functions at the Gaussian points
   call initialise_basis()
@@ -233,6 +236,10 @@ subroutine sanity_checks(my_id, n_cpu, mpi_required, mpi_provided)
     write(*,*) 'FATAL : Hard-coded parameter n_tor has an illegal value', n_tor
     call MPI_Abort(MPI_COMM_WORLD, 23, ierr)
     stop
+  else if ( (n_coord_tor < 1) .or. (mod(n_coord_tor,2) == 0) ) then
+    write(*,*) 'FATAL : Hard-coded parameter n_coord_tor has an illegal value', n_coord_tor
+    call MPI_Abort(MPI_COMM_WORLD, 23, ierr)
+    stop
   else if ( (n_coord_tor > 1) .and. (rst_hdf5_version .eq. 1) ) then
     write(*,*) 'FATAL : Hard-coded parameter n_coord_tor > 1 is only possible with rst_hdf5_version > 1'
     call MPI_Abort(MPI_COMM_WORLD, 23, ierr)
@@ -334,6 +341,13 @@ subroutine sanity_checks(my_id, n_cpu, mpi_required, mpi_provided)
 	   The lower values of the equilibrium profiles (T_1 and/or rho_1) will be used instead.'
 	write(*,*) 'For instance, try in your input file: rho_min_neg = 1.d-3 and T_min_neg = 4.02d-4 !=2.01d-5*central_density*Tmin_ev (with central_density = 1 and Tmin_eV= 20 eV)'    
   endif
+#ifdef WITH_Impurities
+  if (D_prof_imp_neg_thresh .gt. -1.d3) then
+	write(*,*) 'WARNING: You are using a value for D_prof_imp_neg_thresh that is likely to activate the correction for negative impurity density.' 
+	write(*,*) '  No problem if you know what you are doing, but this could lead to convergence issues'
+	write(*,*) '  in particular at the beginning of impurity injection when nimp is oscillating around zero.'
+  endif
+#endif
 
 #ifndef USE_BLOCK
   write(*,*) 'WARNING: You are not using USE_BLOCK=1 which might be inefficient.'
@@ -354,6 +368,8 @@ end subroutine sanity_checks
 subroutine finalize(my_id)
   use phys_module, only: xtime, energies, energies2, energies3, energies4, fftw_plan
   use tr_module, only: tr_deallocate, CAT_UNKNOWN
+  use nodes_elements
+  use data_structure, only: dealloc_node_list
 
   integer, intent(in) :: my_id
   integer :: ierr
@@ -374,6 +390,9 @@ subroutine finalize(my_id)
 #ifdef USE_FFTW
   call dfftw_destroy_plan(fftw_plan)
 #endif
+
+if (allocated(node_list%node)) call dealloc_node_list(node_list)
+if (allocated(aux_node_list%node)) call dealloc_node_list(aux_node_list)
 
   call r3_info_summary()                                 ! timing
   call MPI_Finalize(ierr)                                ! clean up MPI

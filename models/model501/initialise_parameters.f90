@@ -152,7 +152,10 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 visco_par_heating, CARIDDI_mode,                    &
                 T_min_ZKpar,                                        &
                 use_newton, maxNewton, gamma_Newton, alpha_Newton,  &
-                vacuum_min, strumpack_matching
+                vacuum_min, strumpack_matching, xpoint_search_tries,&
+                use_manual_random_seed, manual_seed,                &
+                export_aux_node_list, bgf_rpolar, bgf_tht
+
 if (my_id .eq. 0) then
 
   ! --- Preset input parameters to reasonable default values.
@@ -218,6 +221,7 @@ if (my_id .eq. 0) then
 
   if (sum(nstep_n) .gt. 0) then
     nstep = sum(nstep_n)
+    tstep = tstep_n(1)
 
   else
     tstep_n    = 0.d0

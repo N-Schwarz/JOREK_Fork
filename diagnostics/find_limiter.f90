@@ -39,12 +39,23 @@ integer :: ifail, i_elm, i_elm_axis, ifail_axis
 
 real*8, external :: root
 
+#ifdef UNIT_TESTS
+real*8,parameter :: tol_is_private=1d-16
+#endif
+
 if ( my_id == 0 ) then
   write(*,*) '*********************************'
   write(*,*) '*     find_limiter              *'
   write(*,*) '*********************************'
 end if
 
+#if STELLARATOR_MODEL
+! Psi cannot be used to define the limiter in stellarator cases
+psi_lim = 1.d0
+R_lim   = 0.d0
+Z_lim   = 0.d0
+ifail   = 1
+#else
 if (.not. ES%initialized) then    
   call find_axis(99, node_list, element_list, psi_axis, R_axis, Z_axis, i_elm_axis, s_axis, &
   t_axis, ifail_axis)
@@ -152,13 +163,20 @@ do ibnd=1,bnd_elm_list%n_bnd_elements + n_limiter
       prod = P_R * (RR - R_axis) + P_Z * (Z - Z_axis)   
   
       !--- decide if we are inside a private region
-      is_private = .false.    
-      
+      is_private = .false.
+#ifdef UNIT_TESTS
+      if (ES%axis_is_psi_minimum) then
+        if (prod < -tol_is_private) is_private = .true.
+      else
+        if (prod > tol_is_private) is_private = .true.
+      endif
+#else      
       if (ES%axis_is_psi_minimum) then
         if (prod < 0.d0) is_private = .true.
       else
         if (prod > 0.d0) is_private = .true.
       endif
+#endif
 
       ! --- Second method to double check that the limiter does not belong to a private region
       ! ---    Use X-points to check region (if available and properly found) 
@@ -295,6 +313,7 @@ else
     ifail   = 1
   endif
 endif
+#endif
 
 if ( my_id == 0 ) then
   121 format(1x,a,' =',f15.7)

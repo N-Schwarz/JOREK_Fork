@@ -44,6 +44,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 n_pfc, n_tor_fft_thresh, manipulate_psi_map,        &
                 Rmin_pfc, Rmax_pfc, Zmin_pfc, Zmax_pfc, current_pfc,&
                 tokamak_device,                                     &
+                gvec_grid_import,                                   &
                 F0, gamma_sheath, density_reflection,               &
                 zjz_0, zjz_1, zj_coef,                              &
                 rho_0, rho_1, rho_coef,                             &
@@ -124,7 +125,10 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 weights_per_family, autodistribute_ranks,           &
                 ranks_per_family, cte_current_FB_fact, treat_axis,  &
                 CARIDDI_mode, use_newton, maxNewton, gamma_Newton,  &
-                alpha_Newton, vacuum_min, strumpack_matching
+                alpha_Newton, vacuum_min, strumpack_matching,       &
+                export_aux_node_list, xpoint_search_tries,          &
+                use_manual_random_seed, manual_seed,                &
+                bgf_rpolar, bgf_tht
 
 
 if (my_id .eq. 0) then
@@ -187,6 +191,7 @@ if (my_id .eq. 0) then
   
   if (sum(nstep_n) .gt. 0) then
     nstep = sum(nstep_n)
+    tstep = tstep_n(1)
   else
     tstep_n    = 0.d0
     tstep_n(1) = tstep

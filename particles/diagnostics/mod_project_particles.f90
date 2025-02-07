@@ -22,6 +22,7 @@ module mod_project_particles
 use mod_io_actions
 use data_structure
 use mod_particle_sim
+use phys_module, only: n_aux_var, n_diag_var
 use mod_particle_types
 use mod_fields
 use mod_vtk
@@ -494,9 +495,9 @@ function new_projection(node_list, element_list,                                
   endif
 
   allocate(new%node_list,    source=node_list)
-  new%node_list = node_list
+  call make_deep_copy_node_list(node_list, new%node_list)
 
-  do inode = 1, n_nodes_max
+  do inode = 1, new%node_list%n_nodes
     new%node_list%node(inode)%values = 0.d0
     new%node_list%node(inode)%deltas = 0.d0
   end do
@@ -669,11 +670,6 @@ subroutine project_only(this, sim)
     n_rhs_f = size(this%rhs_f,5)
   end if
 
-  if (n_rhs .gt. n_var .and. this%my_id_n .eq. 0) then
-    write(*,*) 'WARNING: too many rhs-es supplied, skipping after ', n_var
-    n_rhs = n_var
-    ! n_rhs_f should already be 0 in this case, as done by sample_rhs
-  end if
 
   n_tor_local = this%n_tor_local
   i_tor_local = this%i_tor_local
@@ -838,7 +834,7 @@ subroutine project_only(this, sim)
   ! Write the solution to the node_list
   if (this%my_id .eq. 0) then
 
-    do i_var=1,min(n_rhs+n_rhs_f,n_var)
+    do i_var=1,min(n_rhs+n_rhs_f, n_aux_var)
   
       found_nan = .false.
       
@@ -926,9 +922,9 @@ subroutine sample_rhs(this, sim)
   if (.not. allocated(this%f)) allocate(this%f(0))
 
   if (allocated(this%rhs)) then
-    n_sample = min(size(this%f),n_var-min(size(this%rhs,5),n_var))  ! because we have only n_var storage for now
+    n_sample = min(size(this%f),n_aux_var-min(size(this%rhs,5),n_aux_var))  ! because we have only n_var storage for now
   else
-    n_sample = min(size(this%f),n_var)  ! because we have only n_var storage for now
+    n_sample = min(size(this%f),n_aux_var)  ! because we have only n_var storage for now
   end if
 
   if (n_sample .lt. size(this%f) .and. sim%my_id .eq. 0) then
@@ -1048,7 +1044,7 @@ subroutine save_to_vtk(this, sim)
     if (allocated(this%rhs)) n_proj = n_proj + size(this%rhs,5)
 
     call write_particle_distribution_to_vtk(this%node_list, this%element_list, &
-      trim(filename), this%vtk_grid%nsub, min(n_proj,n_var), this%vtk_grid%xyz, this%vtk_grid%ien)
+      trim(filename), this%vtk_grid%nsub, min(n_proj,n_aux_var), this%vtk_grid%xyz, this%vtk_grid%ien)
       
     write(*,*) "Written projection to ", trim(filename)
   end if
@@ -1098,7 +1094,7 @@ subroutine save_to_h5(this, sim)
     n_proj = size(this%f)
     if (allocated(this%rhs)) n_proj = n_proj + size(this%rhs,5)
     call write_particle_distribution_to_h5(this%node_list, this%element_list, &
-      trim(filename), min(n_proj,n_var), sim%time)
+      trim(filename), min(n_proj,n_aux_var), sim%time)
 
     write(*,*) "Written projection to ", trim(filename)
   end if
@@ -1227,7 +1223,7 @@ if (my_id_n .eq. 0) then
 !$omp shared(element_list, node_list, n_tor_local, i_tor_local,                       &
 !$omp        H, H_s, H_t, H_ss, H_st, H_tt, Hz, Hz_p, mumps_par, wgauss2,             &
 !$omp        filter, filter_hyper, filter_parallel, F0, fix_axis_nodes, my_id_master) &
-!$omp private(ELM, i_elm, element, nodes, i, j, k, l, ms, mt, in, im, mp,           &
+!$omp private(ELM, i_elm, element, i, j, k, l, ms, mt, in, im, mp,           &
 !$omp         x_g, x_s, x_t, x_ss, x_st, x_tt,                                      &
 !$omp         y_g, y_s, y_t, y_ss, y_st, y_tt,                                      &
 !$omp         psi_g, psi_s, psi_t, psi_ss, psi_tt, psi_st,                          &
@@ -1236,14 +1232,15 @@ if (my_id_n .eq. 0) then
 !$omp         wst, xjac, xjac_x, xjac_y, psi_x, psi_y, BB2, Bgrad_p, Bgrad_v_star,  &
 !$omp         index_ij, index_kl, ilarge, in_index, im_index,                       &
 !$omp         inode, index_large_i, knode, index_large_k)                           &
-!$omp schedule(static)
+!$omp firstprivate(nodes)                                                           & 
+!$omp schedule(static) 
 do i_elm=1,element_list%n_elements
   
   ELM = 0.d0
 
   element = element_list%element(i_elm)
   do m=1,n_vertex_max
-    nodes(m) = node_list%node(element%vertex(m))
+    call make_deep_copy_node(node_list%node(element%vertex(m)), nodes(m))
   enddo
 
   ! Set up gauss points in this element
@@ -1449,6 +1446,9 @@ do i_elm=1,element_list%n_elements
       enddo
     enddo
   enddo
+  do m=1,n_vertex_max
+    call dealloc_node(nodes(m))
+  enddo
 enddo
 !$omp end parallel do
 ilarge = nz_AA
@@ -1652,7 +1652,7 @@ if (my_id_n .eq. 0) then
 !$omp        H, H_s, H_t, H_ss, H_st, H_tt, Hz, Hz_p, mumps_par, wgauss2,             &
 !$omp        filter_n0, filter_hyper_n0, filter_parallel_n0, integral_weights, F0,    &
 !$omp        fix_axis_nodes, my_id_master)                                            &
-!$omp private(ELM, i_elm, element, nodes, i, j, k, l, ms, mt, in, im, mp,           &
+!$omp private(ELM, i_elm, element, i, j, k, l, ms, mt, in, im, mp,           &
 !$omp         x_g, x_s, x_t, x_ss, x_st, x_tt,                                      &
 !$omp         y_g, y_s, y_t, y_ss, y_st, y_tt,                                      &
 !$omp         psi_g, psi_s, psi_t, psi_ss, psi_tt, psi_st,                          &
@@ -1661,6 +1661,7 @@ if (my_id_n .eq. 0) then
 !$omp         wst, xjac, xjac_x, xjac_y, psi_x, psi_y, BB2, Bgrad_p, Bgrad_v_star,  &
 !$omp         index_ij, index_kl, ilarge, in_index, im_index, basisfunction_volume, &
 !$omp         inode, index_large_i, knode, index_large_k, index_rhs)                &
+!$omp firstprivate(nodes)                                                           & 
 !$omp reduction(+:area,volume) schedule(static)
 do i_elm=1,element_list%n_elements
   
@@ -1668,7 +1669,7 @@ do i_elm=1,element_list%n_elements
 
   element = element_list%element(i_elm)
   do m=1,n_vertex_max
-    nodes(m) = node_list%node(element%vertex(m))
+    call make_deep_copy_node(node_list%node(element%vertex(m)), nodes(m))
   enddo
 
   ! Set up gauss points in this element
@@ -1893,6 +1894,9 @@ do i_elm=1,element_list%n_elements
         enddo
       enddo
     enddo
+  enddo
+  do m=1,n_vertex_max
+    call dealloc_node(nodes(m))
   enddo
 enddo
 !$omp end parallel do

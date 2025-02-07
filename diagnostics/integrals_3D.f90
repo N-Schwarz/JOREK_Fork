@@ -116,6 +116,8 @@ VP_tot   = 0.d0
 VK_tot   = 0.d0
 VM_tot   = 0.d0
 J2_tot   = 0.d0
+TVP_int  = 0.d0
+TVP_ext  = 0.d0
 TVP_tot  = 0.d0
 
 local_pellet_particles = 0.d0
@@ -148,9 +150,9 @@ ife_min   =      my_id     * ife_delta + 1
 ife_max   = min((my_id +1) * ife_delta, element_list%n_elements)
 
 !> Initialise the minimum of all variables
-varmin = 1.e50; varmax = -1.e50; varminout = 1.e50; varmaxout = -1.e50;
+varmin(:) = 1.d50; varmax(:) = -1.d50; varminout(:) = 1.d50; varmaxout(:) = -1.d50;
 
-!$omp parallel default(none)                                                                   &
+!$omp parallel default(none)                                                                   &                                                                  
 !$omp   shared(element_list,node_list, H, H_s, H_t, HZ, HZ_p, ife_min, ife_max, xpoint, xcase, &
 !$omp          ES, my_id, use_pellet, psi_limit, delta_phi,                                    &
 !$omp          D_tot, D_int, D_Ext, P_tot, P_int, P_ext, Vol, C_intern, C_ext, Cre_intern, Cre_ext, Vlight, VP_ext, VP_int, &
@@ -170,7 +172,7 @@ varmin = 1.e50; varmax = -1.e50; varminout = 1.e50; varmaxout = -1.e50;
 !$omp          ns_radius_ratio, ns_radius_min, spi_shard_file,                                 &
 #endif
 !$omp          wgauss_copy,varmin,varmax)                                                      &
-!$omp   private(ife,iv,inode,element,nodes,i,j, k,in, mp, ms, mt, spi_i,i_inj,                 &
+!$omp   private(ife,iv,inode,element,i,j, k,in, mp, ms, mt, spi_i,i_inj,                 &
 !$omp           x_g, y_g, x_s, y_s, x_t, y_t, xjac, eq_g, eq_s, eq_t, eq_p,                    &
 !$omp           wst, BigR, r0, T0, Te0, zj0, ps0, dTdx, dTdy, drhodx, drhody, dpsidx, dpsidy, dudx, dudy,  &
 !$omp           dpdx, dpdy, grad_P, grad_psi, grad_P_psi,gradP_max, gradP_psi_max, phi,        &
@@ -185,10 +187,11 @@ varmin = 1.e50; varmax = -1.e50; varminout = 1.e50; varmaxout = -1.e50;
 #ifdef WITH_Refluid
 !$omp           nre0,                                                          &
 #endif
-!$omp           omp_nthreads,omp_tid)
+!$omp           omp_nthreads,omp_tid)                                                          &
+!$omp   firstprivate(nodes) !< so that these nodes are unallocated at the start of the omp region and can be explicitly allocated/deallocated 
 
 
-#ifdef OPENMP
+#ifdef _OPENMP
 omp_nthreads = omp_get_num_threads()
 omp_tid      = omp_get_thread_num()
 #else
@@ -211,7 +214,8 @@ do ife = ife_min, ife_max
 
   do iv = 1, n_vertex_max
     inode     = element%vertex(iv)
-    nodes(iv) = node_list%node(inode)
+    call make_deep_copy_node(node_list%node(inode), nodes(iv))
+    ! nodes(iv) = node_list%node(inode)
   enddo
 
   x_g(:,:)    = 0.d0; x_s(:,:)    = 0.d0; x_t(:,:)    = 0.d0;
@@ -473,7 +477,9 @@ do ife = ife_min, ife_max
       enddo
     enddo
   enddo
-
+  do i = 1, n_vertex_max
+    call dealloc_node(nodes(i))
+  enddo
 enddo
 !$omp end do
 !$omp end parallel
@@ -575,7 +581,9 @@ if (my_id .eq. 0) then
   endif
 
   write(*,'(A,3e14.6,A)') ' Time : ',xt,xt*t_norm,t_norm, ' [s]'
-  write(*,'(A,4e14.6)')   ' Integrals_3D, PELLET : ',pellet_volume, total_pellet_volume, total_pellet_particles, total_plasma_particles
+  if(use_pellet) then
+    write(*,'(A,4e14.6)')   ' Integrals_3D, PELLET : ',pellet_volume, total_pellet_volume, total_pellet_particles, total_plasma_particles
+  end if
   write(*,'(A,2e14.6,A)') ' Volume   : ',xt,volume,' [m^3]'
   write(*,'(A,4e14.6,A)') ' density  (total/in/out) : ',xt,density_tot,  density_in,  density_out,' [10^20/m^3]'
   write(*,'(A,4e14.6,A)') ' pressure (total/in/out) : ',xt,pressure/1.d6, pressure_in/1.d6, pressure_out/1.d6,' [MJ]'

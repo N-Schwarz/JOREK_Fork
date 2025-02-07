@@ -21,7 +21,7 @@ integer :: ierr,err,i
 ! --- Namelist with input parameters.
 namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 rst_hdf5, rst_hdf5_version, keep_current_prof,      &
-                eta, visco, visco_par,                              &
+                eta, visco, visco_par, visco_par_par,               &
                 restart, rst_format, regrid, bootstrap, write_ps,   &
                 regrid_from_rz,                                     &
                 n_R, n_Z, n_radial, n_pol, n_tht, n_flux,           &
@@ -29,7 +29,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 n_outer, n_inner, n_up_priv, n_up_leg, n_up_leg_out,&
                 n_tht_equidistant,                                  &
                 psi_axis_init, XR_r, SIG_r, XR_tht, SIG_tht,        &
-                XR_z, SIG_z, bgf_r, bgf_z,                          &
+                XR_z, SIG_z, bgf_r, bgf_z, bgf_rpolar, bgf_tht,     &
                 SIG_closed, SIG_open, SIG_private, SIG_theta,       &
                 SIG_leg_0, SIG_leg_1, dPSI_open, dPSI_private,      &
                 SIG_up_leg_0, SIG_up_leg_1, SIG_up_priv,            &
@@ -197,7 +197,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 nsubstep_particles,                                 &
                 filter_perp,    filter_hyper,    filter_par,        &
                 filter_perp_n0, filter_hyper_n0, filter_par_n0,     &
-                use_cx, use_sputtering, use_ionisation,             &
+                use_kn_cx, use_kn_sputtering, use_kn_ionisation,             &
                 use_ncs, use_pcs, use_ccs,                          &
                 min_sheath_angle, bcs,                              &
                 use_sc, add_sources_in_sc, visco_sc_num,            &
@@ -211,16 +211,16 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 visco_par_heating, constant_imp_source,             &
                 T_min_ZKpar,Ti_min_ZKpar,Te_min_ZKpar,              &
                 CARIDDI_mode, use_newton, maxNewton, gamma_Newton,  &
-
                 alpha_Newton, vacuum_min, strumpack_matching,       &
                 visco_old_setup, visco_heating, eta_coul_log_dep,   &
+                export_polar_boundary, xpoint_search_tries,         &
+                use_manual_random_seed, manual_seed,                &
+                loop_voltage, export_aux_node_list,                 &
                 gamma_rel, re_initialize, re_gauss_width, re_gauss_origin, re_gauss_fact, initial_re_current_fraction, vpar_re_sign,   &
                 re_trit_seed, re_compt_seed, re_sec_source, re_adv_fact, Dre_par, Dre_iso, Dre_num,     &
                 impdens_init,  &
                 psinorm_aval_threshold, Dcontrad, &
                 imp_inj_flat, deut_inj_flat
-
-
 
 if (my_id .eq. 0) then
 
@@ -284,6 +284,7 @@ if (my_id .eq. 0) then
 
   if (sum(nstep_n) .gt. 0) then
     nstep = sum(nstep_n)
+    tstep = tstep_n(1)
   else
     tstep_n    = 0.d0
     tstep_n(1) = tstep

@@ -14,7 +14,7 @@ use equil_info
 implicit none
 
 private
-public jorek_timestep_action, new_jorek_timestep_action
+public jorek_timestep_action, new_jorek_timestep_action, get_tstep_n
 
 #ifdef USE_FFTW
   include 'fftw3.f03'
@@ -40,6 +40,7 @@ type, extends(action) :: jorek_timestep_action
 
   ! Coupling data for in construct_matrix
   type(type_node_list), pointer                 :: node_list => null() !< Current node list
+  type(type_node_list), pointer                 :: aux_node_list => null() !< Current node list for particles
   type(type_element_list), pointer              :: element_list => null() !< Current element list    
   type(type_bnd_element_list), pointer          :: bnd_elm_list !< List of boundary elements
   type(type_bnd_node_list), pointer             :: bnd_node_list !< List of boundary nodes.  
@@ -73,7 +74,7 @@ contains
 function new_jorek_timestep_action(auxiliary_node_list) result(new)
   type(jorek_timestep_action) :: new
   type(type_node_list), intent(in), target,  optional :: auxiliary_node_list
-!  if (present(auxiliary_node_list)) new%auxiliary_node_list => auxiliary_node_list
+  if (present(auxiliary_node_list)) new%auxiliary_node_list => auxiliary_node_list
   new%istep = 1
   new%name = "JOREK timestep"
   new%log = .true.
@@ -205,6 +206,7 @@ subroutine setup_solvers(this, sim)
 
   call tr_allocatep(this%local_elms,1,sim%fields%element_list%n_elements,"local_elms",CAT_FEM)
 
+
   this%a_mat%comm = MPI_COMM_WORLD
   
   this%mhd_sim%my_id         = sim%my_id
@@ -234,7 +236,10 @@ subroutine setup_solvers(this, sim)
   call this%solver%setup()
   this%setup_done = .true.
 
-  if (.not. associated(aux_node_list)) allocate(aux_node_list) ! information of particle moments is stored in aux_list
+  if (.not. associated(aux_node_list)) then 
+    allocate(aux_node_list) ! information of particle moments is stored in aux_list
+    call init_node_list(aux_node_list, n_nodes_max, aux_node_list%n_dof, n_aux_var)
+  endif
 
 end subroutine setup_solvers
 
@@ -343,9 +348,9 @@ subroutine do_jorek_timestep(this, sim, ev)
   ! --- Prepare minor radius and q-,ft-,B-splines for bootstrap current
   minRad=0.d0
   if (bootstrap) then
-    call bootstrap_find_minRad(sim%fields%node_list, sim%fields%element_list, this%es%R_axis, this%es%Z_axis, this%es%psi_axis, this%es%psi_bnd)
+    call bootstrap_find_minRad(sim%my_id, sim%fields%node_list, sim%fields%element_list, this%es%R_axis, this%es%Z_axis, this%es%psi_axis, this%es%psi_bnd)
 
-    call bootstrap_get_q_and_ft_splines(sim%fields%node_list, sim%fields%element_list, this%es%psi_axis, this%es%psi_xpoint, this%es%R_xpoint, this%es%Z_xpoint)
+    call bootstrap_get_q_and_ft_splines(sim%my_id, sim%fields%node_list, sim%fields%element_list, this%es%psi_axis, this%es%psi_xpoint, this%es%R_xpoint, this%es%Z_xpoint)
   endif
   
   call clck_time_barrier(t1)
@@ -413,7 +418,6 @@ subroutine do_jorek_timestep(this, sim, ev)
     ! This is a change from jorek2_main, where these quantities are calculated using the old xpoint and axis data
     call update_equil_state(sim%my_id,sim%fields%node_list, sim%fields%element_list, bnd_elm_list, xpoint, xcase)
     this%es = ES
-
     call energy(W_mag, W_kin)
     
 !    call integrals(sim%fields%node_list, sim%fields%element_list,                                                         &
@@ -470,7 +474,8 @@ subroutine do_jorek_timestep(this, sim, ev)
   
   endif ! myid = 0
 
-  call int3d_new(sim%my_id, sim%fields%node_list, sim%fields%element_list, bnd_node_list, bnd_elm_list, exprs_all_int, res, 1)
+
+  call int3d_new(sim%my_id, sim%fields%node_list, sim%fields%element_list, bnd_node_list, bnd_elm_list, exprs_all_int, res, 1, aux_node_list=this%auxiliary_node_list)
 
   if (sim%my_id .eq. 0 ) then
     ! --- Output energies and growth_rates to text files during the code run
@@ -495,7 +500,7 @@ subroutine do_jorek_timestep(this, sim, ev)
   ! --- Write a restart file every nout timesteps
   if ( (sim%my_id == 0) .and. (mod(index_now,nout) == 0) ) then
     write(fileout,'(A5,i5.5)') 'jorek',index_now
-    call export_restart(sim%fields%node_list, sim%fields%element_list, fileout)
+    call export_restart(sim%fields%node_list, sim%fields%element_list, fileout, aux_node_list)
   endif
   
   ! --- Exit the code if NaNs are detected.
@@ -523,7 +528,7 @@ subroutine do_jorek_timestep(this, sim, ev)
 
   ! Write a restart file on code exit
   if (sim%stop_now .and. sim%my_id .eq. 0) then
-    call export_restart(sim%fields%node_list, sim%fields%element_list, 'jorek_restart')
+    call export_restart(sim%fields%node_list, sim%fields%element_list, 'jorek_restart', aux_node_list)
   end if
 
   select type (fields => sim%fields)

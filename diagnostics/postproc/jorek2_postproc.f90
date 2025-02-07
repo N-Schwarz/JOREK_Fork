@@ -3,13 +3,15 @@
 !! Documentation at http://jorek.eu/wiki
 program jorek2_postproc
   
-  use nodes_elements, only: node_list, element_list
+  use nodes_elements, only: node_list, element_list, aux_node_list
   use phys_module
   use mod_new_diag
   use parse_commands, only: read_command, type_command
   use exec_commands,  only: exec_command, specific_help
   use settings,       only: set_setting
   use basis_at_gaussian, only: initialise_basis
+  use mod_import_restart
+  use mod_plasma_functions, only: initialise_reference_parameters
   
   implicit none
   
@@ -27,7 +29,13 @@ program jorek2_postproc
   
   ! --- Preset namelist input parameters
   call preset_parameters()
-  
+
+  ! --- Initialize derived reference parameters
+  call initialise_reference_parameters()  
+
+  ! --- Ensure that aux_node_list is associated
+  if (.not. associated(aux_node_list)) allocate(aux_node_list)
+
   ! --- Preset some parameters
   call set_setting('units',           '0',     ierr, 'Calculate quantities in which units (1=JOREK, 0=SI)')
   call set_setting('loop_units',      '0',     ierr, 'Use which units for time-loops (1=JOREK, 0=SI)'     )
@@ -46,10 +54,11 @@ program jorek2_postproc
   call set_setting('nsub_vtk',        '4',     ierr, 'number of element subdivisions for vtk plots       ')
   call set_setting('vtk_phi_value',   '0',     ierr, 'phi value at which the 2D vtk is computed          ')
   call set_setting('only_itor',      '-1',     ierr, 'select a single toroidal harmonic for calculations ')
+  call set_setting('exclude_n0',      'false', ierr, 'when true, excludes the axisymmetric part(n = 0)   ') 
   
   ! --- Print getting started information
   call specific_help('getting_started')
-  
+
   do ! (main loop: Read, parse, and execute one command after the other)
     
     ! --- Read and parse a command line

@@ -194,7 +194,12 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
   write(*,  112) ' n_dim          =  ', n_dim             
   write(*,  112) ' n_order        =  ', n_order           
   write(*,  112) ' n_tor          =  ', n_tor             
+  write(*,  112) ' n_coord_tor    =  ', n_coord_tor
+#ifdef USE_DOMM
+  write(*,  112) ' l_pol_domm     =  ', l_pol_domm
+#endif
   write(*,  112) ' n_period       =  ', n_period          
+  write(*,  112) ' n_coord_period =  ', n_coord_period
   write(*,  112) ' n_plane        =  ', n_plane           
   write(*,  112) ' n_vertex_max   =  ', n_vertex_max      
   write(*,  112) ' n_nodes_max    =  ', n_nodes_max       
@@ -237,6 +242,7 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
   write(*,REAL_FMT) 'visco                 ', visco
   write(*,REAL_FMT) 'visco_heating         ', visco_heating
   write(*,REAL_FMT) 'visco_par             ', visco_par
+  write(*,REAL_FMT) 'visco_par_par         ', visco_par_par
   write(*,REAL_FMT) 'visco_par_heating     ', visco_par_heating
   write(*,LOGI_FMT) 'restart               ', restart
   write(*,INTG_FMT) 'rst_format            ', rst_format
@@ -259,6 +265,8 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
     write(*,REAL_FMT) 'sig_z                 ', sig_z(:)
     write(*,REAL_FMT) 'bgf_r                 ', bgf_r
     write(*,REAL_FMT) 'bgf_z                 ', bgf_z
+    write(*,REAL_FMT) 'bgf_rpolar            ', bgf_rpolar
+    write(*,REAL_FMT) 'bgf_tht               ', bgf_tht
   end if
 
   write(*,INTG_FMT) 'n_tht                 ', n_tht
@@ -266,6 +274,10 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
   write(*,INTG_FMT) 'n_flux                ', n_flux
   write(*,LOGI_FMT) 'xpoint                ', xpoint
   write(*,REAL_FMT) 'Z_xpoint_limit        ', Z_xpoint_limit(:)
+  write(*,INTG_FMT) 'xpoint_search_tries   ', xpoint_search_tries
+
+  write(*,INTG_FMT) 'm_pol_bc              ', m_pol_bc
+  write(*,INTG_FMT) 'i_plane_rtree         ', i_plane_rtree
 
   if ( xpoint ) then
     write(*,INTG_FMT) 'xcase                 ', xcase
@@ -356,6 +368,16 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
   write(*,REAL_FMT) 'zjz_1                 ', zjz_1
   write(*,REAL_FMT) 'zj_coef               ', zj_coef
 
+  if (.not. num_Phi) then
+    write(*,REAL_FMT) 'phi_0                 ', phi_0
+    write(*,REAL_FMT) 'phi_1                 ', phi_1
+    write(*,REAL_FMT) 'phi_coef              ', phi_coef(1:5)
+  else
+    write(*,CHAR_FMT) 'Phi_file                ', trim(Phi_file)
+    write(*,REAL_FMT) 'Phi_0                   ', Phi_0
+    write(*,REAL_FMT) 'Phi_1                   ', Phi_1
+  end if
+
   if ( .not. num_ffprime ) then
     write(*,REAL_FMT) 'FF_0                  ', FF_0
     write(*,REAL_FMT) 'FF_1                  ', FF_1
@@ -392,12 +414,20 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
     write(*,REAL_FMT) 'V_coeff               ', V_coef(1:10)
   end if
 
+  if (domm) then
+    write(*,CHAR_FMT) 'domm_file             ', domm_file
+    write(*,REAL_FMT) 'R_domm                ', R_domm
+  end if
+
   if ( (abs(V_0) .ge. 1.d-19) .or. (num_rot) ) then
      write(*,LOGI_FMT) 'normalized_velocity_profile', normalized_velocity_profile
   endif
 
 
   if (with_TiTe) then ! (with_TiTe), i.e. single temperature ***************************************
+#if JOREK_MODEL == 180
+    write(*,REAL_FMT)   'TiTe_ratio             ', TiTe_ratio
+#endif
     if ( .not. num_Te ) then
       write(*,REAL_FMT) 'Te_0                   ', Te_0
       write(*,REAL_FMT) 'Te_1                   ', Te_1
@@ -589,6 +619,8 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
 
 
   write(*,LOGI_FMT) 'keep_current_prof     ', keep_current_prof
+  write(*,LOGI_FMT) 'init_current_prof     ', init_current_prof
+  write(*,LOGI_FMT) 'current_prof_initialized', current_prof_initialized
   write(*,LOGI_FMT) 'linear_run            ', linear_run
   write(*,REAL_FMT) 'D_prof_neg            ', D_prof_neg
   write(*,REAL_FMT) 'D_prof_neg_thresh     ', D_prof_neg_thresh
@@ -801,8 +833,8 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
   write(*,LOGI_FMT) 'bench_without_plot    ', bench_without_plot
   write(*,LOGI_FMT) 'mach_one_bnd_integral ', mach_one_bnd_integral
   write(*,LOGI_FMT) 'deuterium_adas        ', deuterium_adas       
-  write(*,LOGI_FMT) 'deuterium_adas_1e20   ', deuterium_adas_1e20
   write(*,LOGI_FMT) 'old_deuterium_atomic  ', old_deuterium_atomic
+  write(*,LOGI_FMT) 'deuterium_adas_1e20   ', deuterium_adas_1e20
   write(*,LOGI_FMT) 'no_mach1_bc           ', no_mach1_bc
   write(*,LOGI_FMT) 'use_newton            ', use_newton
   write(*,INTG_FMT) 'maxNewton             ', maxNewton
@@ -955,27 +987,6 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
    end if
 #endif
 
-     write(*,LOGI_FMT) 'Dcontrad            ',  Dcontrad
-     
-    write(*,REAL_FMT,advance='no') 'deut_inj_flat      '
-    do i = 1, 3
-      write(*,'(10ES12.4)',advance='no') deut_inj_flat(i)%density_rise
-      write(*,'(10ES12.4)',advance='no') deut_inj_flat(i)%rise_time
-      write(*,'(10ES12.4)',advance='no') deut_inj_flat(i)%start_time
-    end do
-    write(*,*)
-
-#if (defined WITH_impurities)
-   write(*,REAL_FMT) 'impdens_init        ',  impdens_init
-    write(*,REAL_FMT,advance='no') 'imp_inj_flat      '
-    do i = 1, 3
-      write(*,'(10ES12.4)',advance='no') imp_inj_flat(i)%density_rise
-      write(*,'(10ES12.4)',advance='no') imp_inj_flat(i)%rise_time
-      write(*,'(10ES12.4)',advance='no') imp_inj_flat(i)%start_time
-    end do
-   write(*,*)
-#endif
-
    !< Additional log for REs
 #if (defined WITH_Refluid)
      write(*,REAL_FMT) 'gamma_rel           ',  gamma_rel
@@ -995,6 +1006,7 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
      write(*,REAL_FMT) 'vpar_re_sign        ',  vpar_re_sign
 #endif
 
+  write(*,REAL_FMT) 'loop_voltage        ',loop_voltage
   write(*,LOGI_FMT) 'restart_particles   ',restart_particles
   write(*,REAL_FMT) 'n_particles         ',n_particles
   write(*,INTG_FMT) 'nstep_particles     ',nstep_particles
@@ -1009,9 +1021,28 @@ write(*,'(1x,a)',advance='no') ' USE_CATALYST : '
   write(*,LOGI_FMT) 'use_ncs,            ',use_ncs     
   write(*,LOGI_FMT) 'use_ccs,            ',use_ccs    
   write(*,LOGI_FMT) 'use_pcs,            ',use_pcs
-  write(*,LOGI_FMT) 'use_ionisation,     ',use_ionisation    
-  write(*,LOGI_FMT) 'use_sputtering,     ',use_sputtering    
-  write(*,LOGI_FMT) 'use_cx,             ',use_cx
+  write(*,LOGI_FMT) 'use_kn_ionisation,     ',use_kn_ionisation    
+  write(*,LOGI_FMT) 'use_kn_sputtering,     ',use_kn_sputtering    
+  write(*,LOGI_FMT) 'use_kn_cx,             ',use_kn_cx
+  write(*,LOGI_FMT) 'use_kn_recombination,  ',use_kn_recombination
+  write(*,LOGI_FMT) 'use_kn_puffing,        ',use_kn_puffing
+  write(*,LOGI_FMT) 'use_kn_line_radiation, ',use_kn_line_radiation
+
+  if (use_kn_puffing) then 
+    write(*,INTG_FMT) 'n_puff                ',  n_puff
+    write(*,REAL_FMT) 'puff_rate,            ',puff_rate
+    write(*,REAL_FMT) 'r_valve,              ',r_valve
+    write(*,REAL_FMT) 'R_valve_loc,          ',R_valve_loc
+    write(*,REAL_FMT) 'Z_valve,              ',Z_valve
+    write(*,REAL_FMT) 'R_valve_loc2,         ',R_valve_loc2
+    write(*,REAL_FMT) 'Z_valve2,             ',Z_valve2
+  endif
+
+  write(*,LOGI_FMT) 'use_manual_random_seed,  ',use_manual_random_seed
+  if (use_manual_random_seed) then
+    write(*,INTG_FMT) 'manual_seed,             ',manual_seed
+  endif     
+
 #ifdef USE_CATALYST
   write(*,CHAR_FMT) 'catalyst_scripts,   ',trim(catalyst_scripts)
 #endif

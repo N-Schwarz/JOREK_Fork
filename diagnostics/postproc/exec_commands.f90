@@ -54,6 +54,7 @@ module exec_commands
   logical,             private, save :: dir_created   = .false. !< Postproc directory created?
   logical,             private, save :: verbose
   logical,             private, save :: debug
+  logical,             private, save :: exclude_n0  
   type(t_expr_list),            save :: expr_list, expr_list_four
   real*8, allocatable, private, save :: result(:,:,:,:), res2d(:,:,:), res1d(:,:), res0d(:), the_sum(:)
   complex*16, allocatable, private, save :: cp(:,:,:,:)
@@ -67,7 +68,7 @@ module exec_commands
   
   private
   public exec_command, general_help, specific_help, clean_up, average, expr_list, step_imported, qprofile, &
-         zeroD_quantities, separatrix, rectangle
+         zeroD_quantities, separatrix, rectangle, boundary_quantities
 
   
   
@@ -143,6 +144,8 @@ module exec_commands
           call int3d(command, first_step, ierr)
         case ( 'equil_params' )
           call equil_params(command, first_step, ierr)
+        case ( 'energy3d' )
+          call energy3d(command, first_step, ierr)
         case ( 'energy_spectrum' )
           call energy_spectrum(command, first_step, ierr)
         case ( 'expressions' )
@@ -153,6 +156,8 @@ module exec_commands
           call expressions_four(command, ierr)
         case ( 'fluxsurfaces' )
           call fluxsurfaces(command, ierr)
+        case ( 'fluxsurface' )
+          call fluxsurface(command, ierr)
         case ( 'for' )
           call loop_start(command, ierr)
         case ( 'four2d' )
@@ -235,13 +240,13 @@ module exec_commands
     else
       
       select case ( trim(command%args(0)) )
-        case ( 'expressions', 'expressions_int', 'mark_coords', 'int2d', 'int3d','midplane',       &
+        case ( 'expressions', 'expressions_int', 'mark_coords', 'int2d', 'int3d','energy3d','midplane',       &
           'average', 'point', 'pol_line', 'int_along_pol_line', 'tor_line', 'equil_params',        &
-          'qprofile', 'q_at_psin', 'fluxsurfaces', 'separatrix', 'set', 'four2d', 'gourdon',       &
-          'jorek-units', 'jnorm_bnd_curr', 'si-units', 'grid', 'grid_diagnostics', 'rectangle',    &
-          'rectangular_torus', 'energy_spectrum', 'average_h5', 'I_halo_TPF', 'spi-state',         &
-          'shards', 'zeroD_quantities', 'boundary_quantities', 'find_q_surface', 'midplane2d',     &
-          'expressions_four', 'RHS_terms_vtk')
+          'qprofile', 'q_at_psin', 'fluxsurfaces', 'fluxsurface', 'separatrix', 'set', 'four2d',   &
+          'gourdon', 'jorek-units', 'jnorm_bnd_curr', 'si-units', 'grid', 'grid_diagnostics',      &
+          'rectangle', 'rectangular_torus', 'energy_spectrum', 'average_h5', 'I_halo_TPF',         &
+          'spi-state', 'shards', 'zeroD_quantities', 'boundary_quantities', 'find_q_surface',      &
+          'midplane2d', 'expressions_four', 'RHS_terms_vtk')
           call add_to_command_queue(command, ierr)
         case ( 'help' )
           call help(command, ierr)
@@ -321,7 +326,7 @@ module exec_commands
     write(*,*)
     
     ! --- Load the restart file
-    call import_restart(node_list, element_list, file_name, rst_format, ierr, .true.)
+    call import_restart(node_list, element_list, file_name, rst_format, ierr, .true., aux_node_list)
     if ( ierr /= 0 ) return
     call boundary_from_grid(node_list, element_list, bnd_node_list, bnd_elm_list, .false.)
     
@@ -331,8 +336,8 @@ module exec_commands
     ! --- Prepare minor radius and q-,ft-,B-splines for bootstrap current
     minRad = 0.0
     if (bootstrap) then
-      call bootstrap_find_minRad(node_list, element_list, ES%R_axis, ES%Z_axis, ES%psi_axis, ES%psi_bnd)
-      call bootstrap_get_q_and_ft_splines(node_list, element_list, ES%psi_axis, ES%psi_xpoint, ES%R_xpoint, ES%Z_xpoint)
+      call bootstrap_find_minRad(0,node_list, element_list, ES%R_axis, ES%Z_axis, ES%psi_axis, ES%psi_bnd)
+      call bootstrap_get_q_and_ft_splines(0,node_list, element_list, ES%psi_axis, ES%psi_xpoint, ES%R_xpoint, ES%Z_xpoint)
     endif
     
     t_now         = t_start
@@ -586,7 +591,7 @@ module exec_commands
 
       ! --- Get xtime from the restart file with the highest step number
       write (file_name,'(a, i5.5)') 'jorek', available_steps(n_avail)
-      call import_restart(node_list, element_list, file_name, rst_format, ierr, .true.)
+      call import_restart(node_list, element_list, file_name, rst_format, ierr, .true., aux_node_list)
       if ( ierr /= 0 ) return
 
       ! --- Set time unit correctly
@@ -1149,7 +1154,7 @@ module exec_commands
     do i = 1, node_list%n_nodes
       node_list%node(i)%values(:,:,:) = values(:,:,:,i) / total_weight
     end do
-    call export_restart(node_list, element_list, 'jorek99999')
+    call export_restart(node_list, element_list, 'jorek99999', aux_node_list)
     deallocate(values)
     
   end subroutine average_h5_finalize
@@ -1665,7 +1670,7 @@ module exec_commands
 
 
   !> Expressions in the computational boundary
-  subroutine boundary_quantities(command, first_step, ierr)
+  subroutine boundary_quantities(command, first_step, ierr, res2d_tmp)
     
     use mod_position, only: bnd_pos, tor_pos
     
@@ -1673,6 +1678,7 @@ module exec_commands
     type(type_command), intent(in)  :: command     !< Command to be executed
     logical,            intent(in)  :: first_step  !< First time step of a for loop?
     integer,            intent(out) :: ierr        !< Error flag
+    real*8, allocatable, optional, intent(out) :: res2d_tmp(:,:,:)
     
     ! --- Local variables
     real*8  :: phimin, phimax
@@ -1719,17 +1725,22 @@ module exec_commands
 
     write(comment,'(a,i6.6, a, 1ES14.6)') 'time step #', index_now, ",  t_now = ", t_now 
 
-    ! --- Print every toroidal angle plane
-    do i_phi = 1, nphi
-      res1d = res2d(i_phi,:,:)
-      if ( i_phi==1 ) then
-        call write_ascii_1d(ierr, ES, expr_list, res1d, FORM_TABLE, header=.true.,           &
-         filename=trim(filename), append=(.not. first_step), blanks=.true., comment=trim(comment))
-      else
-        call write_ascii_1d(ierr, ES, expr_list, res1d, FORM_TABLE, header=.false.,           &
-         filename=trim(filename), append=(.true.), blanks=.false.)
-      endif
-    enddo
+    if (present(res2d_tmp)) then
+      allocate( res2d_tmp(size(res2d,1),size(res2d,2),size(res2d,3)) )
+      res2d_tmp = res2d
+    else
+      ! --- Print every toroidal angle plane
+      do i_phi = 1, nphi
+        res1d = res2d(i_phi,:,:)
+        if ( i_phi==1 ) then
+          call write_ascii_1d(ierr, ES, expr_list, res1d, FORM_TABLE, header=.true.,           &
+          filename=trim(filename), append=(.not. first_step), blanks=.true., comment=trim(comment))
+        else
+          call write_ascii_1d(ierr, ES, expr_list, res1d, FORM_TABLE, header=.false.,           &
+          filename=trim(filename), append=(.true.), blanks=.false.)
+        endif
+      enddo
+    endif
     
     if ( allocated(result) ) deallocate(result)
     
@@ -1750,7 +1761,8 @@ module exec_commands
     logical, optional, intent(in)   :: flux_av     !< Perform proper flux average
     
     ! --- Local variables
-    integer :: units, npts, nsmall, i_exp
+    integer :: units, npts, nsmall, i_exp, nmaxstep
+    real*8  :: deltaphi, PsiNmin, PsiNmax
     character(len=1024) :: filename, comment
     type(t_pol_pos_list), save :: pol_pos_list
     type(t_tor_pos_list), save :: tor_pos_list
@@ -1762,16 +1774,20 @@ module exec_commands
     call check_step_imported(ierr);          if ( ierr /= 0 ) return
     call check_exprs_selected(ierr);         if ( ierr /= 0 ) return
     
-    units = get_int_setting('units', ierr)
-    npts  = get_int_setting('surfaces', ierr)
-    nsmall= get_int_setting('nsmallsteps', ierr)
+    units    = get_int_setting('units', ierr)
+    npts     = get_int_setting('surfaces', ierr)
+    nsmall   = get_int_setting('nsmallsteps', ierr)
+    nmaxstep = get_int_setting('nmaxsteps', ierr)
+    deltaphi = get_float_setting('deltaphi', ierr)
+    PsiNmin  = get_float_setting('rad_range_min', ierr)
+    PsiNmax  = get_float_setting('rad_range_max', ierr)
     
     write(filename,'(4a)') trim(DIR), 'exprs_averaged',                                                  &
       trim(step_range_string(loop_min_step,loop_max_step)), '.dat'
     
     ! ### is nTht and nphi really chosen well???
     pol_pos_list = pol_pos(node_list, element_list, ES, nPsiN=npts, nTht=max(150,6*n_plane),                &
-      nsmallsteps=nsmall)
+      nsmallsteps=nsmall, nmaxsteps=nmaxstep, deltaphi=deltaphi, PsiNmax=PsiNmax, PsiNmin=PsiNmin )
     tor_pos_list = tor_pos(nphi=max(n_plane,2))
 
     if (present(flux_av)) then
@@ -2159,7 +2175,7 @@ module exec_commands
     call check_exprs_selected(ierr);           if ( ierr /= 0 ) return
     units = get_int_setting('units', ierr)
 
-    allocate(res(expr_list%n_expr+1))
+    allocate(res(expr_list%n_expr))
     res = 0.d0   
  
     write(filename,'(4a)') trim(DIR), 'integrals3D',  &
@@ -2177,7 +2193,6 @@ module exec_commands
         iostat=ierr)
     
     if ( first_step ) then
-      write(i_file,'(a)',advance='no') '# time                   '
       do i = 1, expr_list%n_expr
         s = trim(expr_list%expr(i)%name)
         write(i_file,'(a)',advance='no') s
@@ -2185,17 +2200,81 @@ module exec_commands
       write(i_file,'(a)')
     end if
     close(i_file)
- 
-   call int3d_new(0, node_list, element_list, bnd_node_list, bnd_elm_list, expr_list, res, units)        
+   
+    exclude_n0 = .false.
+    exclude_n0 = get_log_setting('exclude_n0', ierr) 
+    call int3d_new(0, node_list, element_list, bnd_node_list, bnd_elm_list, expr_list, res, units, exclude_n0)        
 
-   call write_ascii_0d(ierr, ES, expr_list, res, FORM_TABLE, header=.false.,                   &
+    call write_ascii_0d(ierr, ES, expr_list, res, FORM_TABLE, header=.false.,                   &
      filename=filename, append=.true., blanks=.false.)
    
   end subroutine int3D
   
+
+
+
+
+
+  !> Output energies distributed among mode families. This routine is intended for use with stellarator models.
+  !!
+  !! The magnetic and kinetic energies are integrated over the plasma volume and separated into the configuration
+  !! mode families (see: C. Schwab 1993 Phys. Fluids B 5 3195-206 Section III)
+  subroutine energy3d(command, first_step, ierr)
+    
+    use mod_energy3D
+
+    ! --- Routine parameters
+    type(type_command), intent(in)  :: command     !< Command to be executed
+    logical,            intent(in)  :: first_step  !< First time step of a for loop?
+    integer,            intent(out) :: ierr        !< Error flag
+    
+    ! --- Local variables
+    integer :: i_file, i, i_mode_family, units
+    real*8, dimension(1+int(n_coord_period/2)) :: Wmag, Wkin
+    character(len=1024) :: filename, status, access
+
+    ierr = 0
+
+    ! --- Some checks
+    call check_args(command%n_args,ierr,0,1);  if ( ierr /= 0 ) return
+    call check_step_imported(ierr);            if ( ierr /= 0 ) return
+    units = get_int_setting('units', ierr)
+  
+    ! Open file
+    write(filename,'(4a)') trim(DIR), 'energies3D', trim(step_range_string(loop_min_step,loop_max_step)), '.dat'
+    status = 'replace'; access = 'sequential'
+    if ( .not. first_step ) then
+      status = 'old'; access = 'append'
+    end if
+    i_file=133
+    open(i_file, file=trim(filename), form='formatted', status=trim(status), access=trim(access), iostat=ierr)
+    
+    ! Set header for file
+    if ( first_step ) then
+      write(i_file,'(a)',advance='no') '# time                   '
+      ! List toroidal mode families in header
+      do i_mode_family = 1,1+int(n_coord_period/2)
+        write(i_file,'(A7,",",I2.2,A2,1x)',advance='no') '"E_{mag', i_mode_family - 1, '}"'
+      end do
+      do i_mode_family = 1,1+int(n_coord_period/2)
+        write(i_file,'(A7,",",I2.2,A2,1x)',advance='no') '"E_{kin', i_mode_family - 1, '}"'
+      end do
+      write(i_file,'(a)')
+    end if
+ 
+    ! Compute energy in mode families
+    call energy3d_new(node_list,element_list,Wmag(:),Wkin(:))        
+
+    ! Output time step to file
+    write(i_file,'(12E18.8)')  time_now, Wmag(:), Wkin(:)
+    close(i_file)
+   
+  end subroutine energy3d
   
   
  
+
+
 
   !> Output current density normal to the jorek boundary as a function of Rbnd
   !! and Zbnd
@@ -2707,6 +2786,98 @@ module exec_commands
     
   end subroutine fluxsurfaces
   
+
+  !> Output the flux surface.
+  subroutine fluxsurface(command, ierr)
+  
+    ! --- Routine parameters
+    type(type_command), intent(in)  :: command     !< Command to be executed
+    integer,            intent(out) :: ierr        !< Error flag
+    
+    
+    ! --- Local variables
+    integer                  :: i, j, i_elm, ip, nplot, i_file
+    type (type_surface_list) :: surface_list
+    character(len=1024)      :: filename, comment
+    type(t_expr_list)        :: tmp_expr_list
+    real*8                   :: psi_min, psi_max, psi_min2, psi_max2, ss1, dss1, ss2, dss2, tt1,   &
+      dtt1, tt2, dtt2, u, si, dsi, ti, dti, R, R_s, R_t, R_st, R_ss, R_tt, Z, Z_s, Z_t, Z_st, Z_ss,&
+      Z_tt, target_psi
+    
+    ierr = 0
+    
+    ! --- Some checks
+    call check_args(command%n_args,ierr,1);  if ( ierr /= 0 ) return
+    call check_step_imported(ierr);          if ( ierr /= 0 ) return
+
+    target_psi = to_float(command%args(1), ierr); if ( ierr /= 0 ) return
+    
+    write(filename,'(5a)') trim(DIR), 'fluxsurface_at_psi_', trim(real2str(target_psi)), &
+      trim(step_range_string(index_start,index_start)), '.dat'
+
+    if (target_psi < 0.0 .or. target_psi > 1.0) then
+      write(*,*), 'fluxsurface target psi must be a valid normalised psi.'
+      return
+    endif
+
+    target_psi = ES%psi_axis + target_psi * (ES%psi_bnd - ES%psi_axis)
+
+    ! --- Find flux surfaces
+    surface_list%n_psi = 1
+    allocate( surface_list%psi_values(1) )
+    surface_list%psi_values(1) = target_psi
+    call find_flux_surfaces(0,xpoint, xcase, node_list, element_list, surface_list)
+    
+    ! --- Write out flux surfaces
+    nplot  = 5
+    i_file = 111
+    call open_ascii_file(ierr, i_file, filename, .false.)
+      
+    ! --- Loop over all segments of this flux surface
+    do j=1,surface_list%flux_surfaces(1)%n_pieces
+      
+      ! --- Bezier element, in which the current flux surface segment is located
+      i_elm = surface_list%flux_surfaces(1)%elm(j)
+      ss1  = surface_list%flux_surfaces(1)%s(1,j)
+      dss1 = surface_list%flux_surfaces(1)%s(2,j)
+      ss2  = surface_list%flux_surfaces(1)%s(3,j)
+      dss2 = surface_list%flux_surfaces(1)%s(4,j)
+      
+      tt1  = surface_list%flux_surfaces(1)%t(1,j)
+      dtt1 = surface_list%flux_surfaces(1)%t(2,j)
+      tt2  = surface_list%flux_surfaces(1)%t(3,j)
+      dtt2 = surface_list%flux_surfaces(1)%t(4,j)
+      
+      ! --- Loop over nplot points in a flux surface segment
+      do ip = 1, nplot
+        u = -1. + 2.*float(ip-1)/float(nplot-1)
+        
+        ! --- Determine s and t values of the current point inside element i_elm
+        call CUB1D(ss1, dss1, ss2, dss2, u, si, dsi)
+        call CUB1D(tt1, dtt1, tt2, dtt2, u, ti, dti)
+        
+        ! --- Determine (R,Z)-coordinates of the current point on the current flux surface
+        call interp_RZ(node_list, element_list, i_elm, si, ti, R, R_s, R_t, R_st, R_ss, R_tt, &
+          Z, Z_s, Z_t, Z_st, Z_ss, Z_tt)
+          
+        ! --- Write out the (R,Z)-coordinates
+        write(i_file,'(2ES16.7)') R, Z
+      end do
+      
+      write(i_file,*)
+      write(i_file,*)
+      
+    end do
+    
+    close(i_file)
+    
+    ! --- Clean up.
+    if ( allocated(surface_list%psi_values)    ) deallocate(surface_list%psi_values)
+    if ( allocated(surface_list%flux_surfaces) ) deallocate(surface_list%flux_surfaces)
+    
+  end subroutine fluxsurface
+
+
   !> Output vtk file of individual terms of the RHS in elm_matrix 
   subroutine RHS_terms_vtk(command, first_step, ierr)
 
@@ -3350,7 +3521,7 @@ module exec_commands
 #endif  
 
   end subroutine RHS_terms_vtk   
-  
+ 
   !> Output the separatrix.
   recursive subroutine separatrix(command, ierr, R_sep, Z_sep)
   
@@ -3738,9 +3909,5 @@ module exec_commands
     write(*,*)
     
   end subroutine grid_diagnostics
-  
-  
-  
-  
   
 end module exec_commands

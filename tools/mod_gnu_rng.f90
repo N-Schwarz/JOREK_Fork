@@ -11,12 +11,15 @@ public :: set_seed_sys_time
 ! gnu_rng_interval: template interface for the
 ! gnu_rng_interval implementation
 interface gnu_rng_interval
+  module procedure gnu_rng_char_table_single
   module procedure gnu_rng_int_interval_single
   module procedure gnu_rng_int_interval_1d
   module procedure gnu_rng_int_interval_2d
+  module procedure gnu_rng_int_interval_3d
   module procedure gnu_rng_real8_interval_single 
   module procedure gnu_rng_real8_interval_1d
   module procedure gnu_rng_real8_interval_2d
+  module procedure gnu_rng_real8_interval_3d
   module procedure gnu_rng_interval_1d_val_1d
 end interface gnu_rng_interval
 
@@ -109,6 +112,37 @@ end subroutine set_seed_sys_time_2vars_1d
 
 
 ! Uniform RNG ------------------------------------------------
+! gnu_rng_char_table_single compute a
+! random string from a given table of
+! strings. All strings in the table
+! must have length 1.
+! inputs:
+!   char_len:   (integer) length of the random string
+!               to be generated
+!   table_size: (integer) size of the character tables
+!   char_table: (character(1))(table_size) table from which
+!               characteres are randomly picked up
+! outputs:
+!   rnc: (char_len) random string
+subroutine gnu_rng_char_table_single(char_len,table_size,&
+char_table,rnc)
+  implicit none
+
+  !> inputs: 
+  integer,intent(in) :: char_len,table_size
+  character(len=1),dimension(table_size),intent(in) :: char_table
+  !> outputs:
+  character(len=char_len),intent(out) :: rnc
+  !> variables
+  integer :: ii,id
+
+  !> compute random string of length char_len
+  rnc = ''
+  do ii=1,char_len
+    call gnu_rng_int_interval_single((/1,table_size/),id)
+    rnc = trim(rnc)//trim(char_table(id))
+  enddo
+end subroutine gnu_rng_char_table_single
 
 ! gnu_rng_int_interval_single computes a
 ! random integer from uniform distribution
@@ -178,6 +212,31 @@ subroutine gnu_rng_int_interval_2d(N_rows,N_cols,interval,ids)
   call random_number(rnds)
   ids = floor(interval(1)+(interval(2)-interval(1)+1)*rnds)
 end subroutine gnu_rng_int_interval_2d
+
+! gnu_rng_int_interval_3d computes a 3D-array of
+! random integers from a uniform distribution
+! inputs:
+!   N_rows:   (intrger) N# of array rows
+!   N_cols:   (integer) N# of array columns
+!   N_arr:    (integer) N# number of arrays
+!   interval: (integer)(2) minimum and maximum values
+! outputs:
+!   ids: (index)(N_rows,N_cols,N_arr) array of random integers
+subroutine gnu_rng_int_interval_3d(N_rows,N_cols,N_arr,interval,ids)
+  implicit none
+
+  ! inputs
+  integer,intent(in) :: N_rows,N_cols,N_arr
+  integer,dimension(2),intent(in) :: interval
+  ! outputs
+  integer,dimension(N_rows,N_cols,N_arr),intent(out) :: ids
+  ! variables
+  real*8,dimension(N_rows,N_cols,N_arr) :: rnds
+
+  ! compute random integer
+  call random_number(rnds)
+  ids = floor(interval(1)+(interval(2)-interval(1)+1)*rnds)
+end subroutine gnu_rng_int_interval_3d
 
 ! gnu_rng_rng_interval_single computes a
 ! random double from uniform distribution
@@ -257,6 +316,39 @@ subroutine gnu_rng_real8_interval_2d(N_rows,N_cols,interval,rng_array_2d)
   interval(1))*rng_array_2d
 
 end subroutine gnu_rng_real8_interval_2d
+
+! gnu_rng_interval_2d generates a 2D random number array
+! using the gnu-fortran intrinsic function within a 
+! predefined interval (uniform distribution)
+! inputs:
+!   N_rows:       (int) number of array rows
+!   N_cols:       (int) number of array cols
+!   N_arr:        (int) number of arrays
+!   interval:     (2)(real8) interval within the value
+!                            are generated
+!   rng_array_2d: (N_rows,N_cols)(real8) 2D array of 
+!                            uniform random numbers 
+!                            within an interval
+! outputs:
+!   rng_array_3d: (N_rows,N_cols,N_arr)(real8) 3D array of 
+!                            uniform random numbers 
+!                            within an interval
+subroutine gnu_rng_real8_interval_3d(N_rows,N_cols,N_arr,&
+interval,rng_array_3d)
+  implicit none
+
+  ! inputs:
+  integer,intent(in)             :: N_rows,N_cols,N_arr
+  real*8,dimension(2),intent(in) :: interval
+  ! inputs-outputs:
+  real*8,dimension(N_rows,N_cols,N_arr),intent(inout) :: rng_array_3d
+
+  ! generate random number array
+  call random_number(rng_array_3d)
+  rng_array_3d = interval(1) + (interval(2)-&
+  interval(1))*rng_array_3d
+
+end subroutine gnu_rng_real8_interval_3d
 
 ! gnu_rng_interval_1d_val_1d generates a 1D random number array
 ! using the gnu-fortran intrinsic function within a 

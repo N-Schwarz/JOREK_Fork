@@ -3,7 +3,7 @@ implicit none
 contains
 !> Export the current simulation state as a restart file that can be read back into JOREK or into
 !! a diagnostic program by the routine import_restart.
-subroutine export_restart(node_list,element_list,filename)
+subroutine export_restart(node_list,element_list,filename,aux_node_list)
 
   use mod_parameters
   use data_structure
@@ -13,9 +13,10 @@ subroutine export_restart(node_list,element_list,filename)
   implicit none
 
   ! --- Routine parameters
-  type(type_node_list),    intent(in) :: node_list
-  type(type_element_list), intent(in) :: element_list
-  character(len=*)       , intent(in) :: filename
+  type(type_node_list),    intent(in)                 :: node_list
+  type(type_node_list), pointer, intent(in), optional :: aux_node_list
+  type(type_element_list), intent(in)                 :: element_list
+  character(len=*)       , intent(in)                 :: filename
 
   character*17 :: fileout
 
@@ -23,19 +24,27 @@ subroutine export_restart(node_list,element_list,filename)
     ! --- Write restart binary file
     fileout = trim(filename)//".rst"
     write (6,*) " =============>, jorek2, filename = ", fileout
-    call export_binary_restart(node_list, element_list, fileout)
+    if(present(aux_node_list)) then
+       call export_binary_restart(node_list, element_list, fileout, aux_node_list)
+    else
+       call export_binary_restart(node_list, element_list, fileout)
+    endif
   elseif ( rst_hdf5 == 1 ) then
     ! --- Write restart HDF5 file
     fileout = trim(filename)//".h5"
     write (6,*) " =============>, jorek2, filename = ", fileout
-    call export_hdf5_restart(node_list, element_list, fileout)
+    if(present(aux_node_list)) then
+       call export_hdf5_restart(node_list, element_list, fileout, aux_node_list)
+    else
+       call export_hdf5_restart(node_list, element_list, fileout)
+    endif
   end if
 
 end subroutine export_restart
 
 !
 ! Export in a binary restart file
-subroutine export_binary_restart(node_list,element_list,filename)
+subroutine export_binary_restart(node_list,element_list,filename,aux_node_list)
 
   use mod_parameters
   use data_structure
@@ -48,9 +57,10 @@ subroutine export_binary_restart(node_list,element_list,filename)
 #include "version.h"
 
   ! --- Routine parameters
-  type(type_node_list),    intent(in) :: node_list
-  type(type_element_list), intent(in) :: element_list
-  character(len=*),        intent(in) :: filename
+  type(type_node_list),        intent(in)          :: node_list
+  type(type_node_list),pointer,intent(in),optional :: aux_node_list
+  type(type_element_list),     intent(in)          :: element_list
+  character(len=*),            intent(in)          :: filename
 
   ! --- Local variables
   integer :: i
@@ -84,6 +94,13 @@ subroutine export_binary_restart(node_list,element_list,filename)
      write(21) node_list%node(i)%x
      write(21) node_list%node(i)%values
      write(21) node_list%node(i)%deltas
+     if(present(aux_node_list)) then
+       if(export_aux_node_list .and. associated(aux_node_list)) then
+         if(aux_node_list%n_nodes .gt. 0) then
+           write(21) aux_node_list%node(i)%values
+         endif
+      endif
+    endif
 #ifdef fullmhd
      write(21) node_list%node(i)%psi_eq               !< equilibrium flux at the nodes
      write(21) node_list%node(i)%Fprof_eq             !< equilibrium profile R*B_phi at the nodes
@@ -101,7 +118,21 @@ subroutine export_binary_restart(node_list,element_list,filename)
      write(21) node_list%node(i)%constrained
   enddo
 
+#if STELLARATOR_MODEL
+  do i=1,element_list%n_elements
+    write(21) element_list%element(i)%vertex             
+    write(21) element_list%element(i)%neighbours
+    write(21) element_list%element(i)%size
+    write(21) element_list%element(i)%father
+    write(21) element_list%element(i)%n_sons
+    write(21) element_list%element(i)%n_gen
+    write(21) element_list%element(i)%sons
+    write(21) element_list%element(i)%contain_node
+    write(21) element_list%element(i)%nref
+  enddo
+#else
   write(21) element_list%element(1:element_list%n_elements)
+#endif
   write(21) tstep,eta,visco,visco_par
   write(21) index_now
   write(21) t_now
@@ -262,7 +293,7 @@ end subroutine export_binary_restart
 
  ! 
  ! Export in a HDF5 binary restart file
-subroutine export_hdf5_restart(node_list,element_list,filename)
+subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
  
   use data_structure
   use phys_module
@@ -281,9 +312,10 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
 #include "version.h"
  
   ! --- Routine parameters
-  type(type_node_list),    intent(in) :: node_list
-  type(type_element_list), intent(in) :: element_list
-  character*(*),           intent(in) :: filename
+  type(type_node_list),         intent(in)         :: node_list
+  type(type_node_list),pointer,intent(in),optional :: aux_node_list
+  type(type_element_list),      intent(in)         :: element_list
+  character*(*),                intent(in)         :: filename
 
   ! --- Local variables
   integer :: i
@@ -292,11 +324,19 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
 #ifdef USE_HDF5
   integer(HID_T)     :: file_id
   integer            :: ind, ierr
+  character          :: t_current_prof_initialized
 
   ! type_node, node_list%n_nodes
   real(RKIND), allocatable :: t_x(:,:,:,:)                 ! n_coord_tor, n_degrees, n_dim
   real(RKIND), allocatable :: t_values(:,:,:,:)            !       n_tor, n_degrees, n_var
   real(RKIND), allocatable :: t_deltas(:,:,:,:)            !       n_tor, n_degrees, n_var
+  real(RKIND), allocatable :: t_aux_values(:,:,:,:)        !       n_tor, n_degrees, n_var
+  real(RKIND), allocatable :: t_pressure(:,:)              !              n_degrees
+  real(RKIND), allocatable :: t_r_tor_eq(:,:)              !              n_degrees
+  real(RKIND), allocatable :: t_j_field(:,:,:,:)           ! n_coord_tor, n_degrees, n_dim
+  real(RKIND), allocatable :: t_b_field(:,:,:,:)           ! n_coord_tor, n_degrees, n_dim
+  real(RKIND), allocatable :: t_chi_correction(:,:,:)      ! n_coord_tor, n_degrees
+  real(RKIND), allocatable :: t_j_source(:,:,:)            !       n_tor, n_degrees
 
   real(RKIND), allocatable :: t_psi_eq(:,:)                ! n_degrees
   real(RKIND), allocatable :: t_Fprof_eq(:,:)              ! n_degrees
@@ -362,6 +402,26 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
        "node_list%values",CAT_UNKNOWN)
   call tr_allocate(t_deltas,1,node_list%n_nodes,1,n_tor,1,n_degrees,1,n_var, &
        "node_list%deltas",CAT_UNKNOWN)
+  if(present(aux_node_list)) then
+    if(export_aux_node_list .and. associated(aux_node_list)) then
+      call tr_allocate(t_aux_values,1,node_list%n_nodes,1,n_tor,1,n_degrees,1,n_var, &
+          "aux_node_list%values",CAT_UNKNOWN)
+    endif
+  endif
+#if STELLARATOR_MODEL
+  call tr_allocate(t_r_tor_eq,1,node_list%n_nodes,1,n_degrees, &
+       "node_list%r_tor_eq",CAT_UNKNOWN)                                           
+  call tr_allocate(t_pressure,1,node_list%n_nodes,1,n_degrees, &
+       "node_list%pressure",CAT_UNKNOWN)                                           
+  call tr_allocate(t_j_field,1,node_list%n_nodes,1,n_coord_tor,1,n_degrees,1,n_dim+1, &
+       "node_list%j_field",CAT_UNKNOWN)                                           
+  call tr_allocate(t_b_field,1,node_list%n_nodes,1,n_coord_tor,1,n_degrees,1,n_dim+1, &
+       "node_list%b_field",CAT_UNKNOWN)
+  call tr_allocate(t_chi_correction,1,node_list%n_nodes,1,n_coord_tor,1,n_degrees, &
+       "node_list%chi_correction",CAT_UNKNOWN)
+  call tr_allocate(t_j_source,1,node_list%n_nodes,1,n_tor,1,n_degrees, &
+       "node_list%j_source",CAT_UNKNOWN)
+#endif
 
 #ifdef fullmhd
   call tr_allocate(t_psi_eq,1,node_list%n_nodes,1,n_degrees, &
@@ -423,9 +483,22 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
 
   !
   do i=1,node_list%n_nodes
-     t_x(i,:,:,:)        = node_list%node(i)%x
-     t_values(i,:,:,:) = node_list%node(i)%values
-     t_deltas(i,:,:,:) = node_list%node(i)%deltas
+     t_x(i,:,:,:)          = node_list%node(i)%x
+     t_values(i,:,:,:)     = node_list%node(i)%values
+     t_deltas(i,:,:,:)     = node_list%node(i)%deltas
+
+#if STELLARATOR_MODEL
+     t_r_tor_eq(i,:)           = node_list%node(i)%r_tor_eq
+#if JOREK_MODEL == 180
+     t_pressure(i,:)           = node_list%node(i)%pressure
+     t_j_field(i,:,:,:)        = node_list%node(i)%j_field
+     t_b_field(i,:,:,:)        = node_list%node(i)%b_field
+#endif
+#ifndef USE_DOMM
+     t_chi_correction(i,:,:)   = node_list%node(i)%chi_correction
+#endif
+     t_j_source(i,:,:)         = node_list%node(i)%j_source
+#endif
 
 #ifdef fullmhd
      t_psi_eq(i,:)     = node_list%node(i)%psi_eq
@@ -453,6 +526,14 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
      end if
   end do
 
+  if(present(aux_node_list)) then
+    if(export_aux_node_list .and. associated(aux_node_list)) then
+      do i=1,aux_node_list%n_nodes
+        t_aux_values(i,:,:,:) = aux_node_list%node(i)%values
+      enddo
+    endif
+  endif
+
   do i=1,element_list%n_elements
      t_vertex(i,:)       = element_list%element(i)%vertex
      t_neighbours(i,:)   = element_list%element(i)%neighbours
@@ -464,6 +545,12 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
      t_contain_node(i,:) = element_list%element(i)%contain_node
      t_nref(i)           = element_list%element(i)%nref
   end do
+  
+  if (current_prof_initialized) then
+    t_current_prof_initialized = 'T'
+  else
+    t_current_prof_initialized = 'F'
+  end if
 
   ! -> Create and open HDF5 file
   write (6,*) " HDF5 file ", filename
@@ -495,6 +582,7 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
   call HDF5_integer_saving(file_id,n_order,'n_order'//char(0))
   call HDF5_integer_saving(file_id,n_tor,'n_tor'//char(0))
   call HDF5_integer_saving(file_id,n_coord_tor,'n_coord_tor'//char(0))
+  call HDF5_integer_saving(file_id,l_pol_domm,'l_pol_domm'//char(0))
   call HDF5_integer_saving(file_id,n_period,'n_period'//char(0))
   call HDF5_integer_saving(file_id,n_plane,'n_plane'//char(0))
   call HDF5_integer_saving(file_id,n_vertex_max,'n_vertex_max'//char(0))
@@ -522,6 +610,33 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
        node_list%n_nodes,n_tor,n_degrees,n_var,'values'//char(0))
   call HDF5_array4D_saving(file_id,t_deltas, &
        node_list%n_nodes,n_tor,n_degrees,n_var,'deltas'//char(0))
+  if(present(aux_node_list)) then
+    if(export_aux_node_list .and. associated(aux_node_list)) then
+      if(aux_node_list%n_nodes .gt. 0) then
+        call HDF5_array4D_saving(file_id,t_aux_values, &
+           node_list%n_nodes,n_tor,n_degrees,n_var,'aux_values'//char(0))
+      endif
+    endif
+  endif
+
+#if STELLARATOR_MODEL
+  call HDF5_array2D_saving(file_id,t_r_tor_eq, &
+       node_list%n_nodes,n_degrees,'r_tor_eq'//char(0))
+#if JOREK_MODEL == 180
+  call HDF5_array2D_saving(file_id,t_pressure, &
+       node_list%n_nodes,n_degrees,'pressure'//char(0))
+  call HDF5_array4D_saving(file_id,t_j_field, &
+       node_list%n_nodes,n_coord_tor,n_degrees,n_dim+1,'j_field'//char(0))
+  call HDF5_array4D_saving(file_id,t_b_field, &
+       node_list%n_nodes,n_coord_tor,n_degrees,n_dim+1,'b_field'//char(0))
+#endif
+#ifndef USE_DOMM
+  call HDF5_array3D_saving(file_id,t_chi_correction, &
+       node_list%n_nodes,n_coord_tor,n_degrees,'chi_correction'//char(0))
+#endif
+  call HDF5_array3D_saving(file_id,t_j_source, &
+       node_list%n_nodes,n_tor,n_degrees,'j_source'//char(0))
+#endif
 
 #ifdef fullmhd
   call HDF5_array2D_saving(file_id,t_psi_eq, &
@@ -580,9 +695,16 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
   call HDF5_real_saving(file_id,central_density,'central_density'//char(0))
   call HDF5_real_saving(file_id,central_mass,'central_mass'//char(0))
   call HDF5_real_saving(file_id,F0,'F0'//char(0))
+  call HDF5_real_saving(file_id,R_domm,'R_domm'//char(0))
   call HDF5_real_saving(file_id,sqrt_mu0_rho0,'sqrt_mu0_rho0'//char(0))
   call HDF5_real_saving(file_id,sqrt_mu0_rho0,'t_norm'//char(0))
   call HDF5_real_saving(file_id,sqrt_mu0_over_rho0,'sqrt_mu0_over_rho0'//char(0))
+  call HDF5_char_saving(file_id,t_current_prof_initialized,'current_prof_initialized'//char(0))
+
+  if (domm) then
+    call HDF5_array3D_saving(file_id,dcoef(1:4,0:l_pol_domm,0:(n_coord_tor-1)/2), &
+         4,l_pol_domm+1,(n_coord_tor+1)/2,'dcoef'//char(0))
+  end if
 
   if (index_now .gt. 0) then
      call HDF5_array1D_saving(file_id,t_xtime,index_now,'xtime'//char(0))
@@ -654,6 +776,10 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
      call HDF5_array1D_saving(file_id,area_t(1:index_now),index_now,'area_t'//char(0))
      call HDF5_array1D_saving(file_id,volume_t(1:index_now),index_now,'volume_t'//char(0))
      call HDF5_array1D_saving(file_id,mag_ener_src_tot(1:index_now),index_now,'mag_ener_src_tot'//char(0))
+     call HDF5_array1D_saving(file_id,Px_t(1:index_now),index_now,'Px_t'//char(0))
+     call HDF5_array1D_saving(file_id,Py_t(1:index_now),index_now,'Py_t'//char(0))
+     call HDF5_array1D_saving(file_id,dPx_dt(1:index_now),index_now,'dPx_dt'//char(0))
+     call HDF5_array1D_saving(file_id,dPy_dt(1:index_now),index_now,'dPy_dt'//char(0))
 #ifdef WITH_Refluid
      call HDF5_array1D_saving(file_id,re_current_t(1:index_now),index_now,'re_current_t'//char(0))
      call HDF5_array1D_saving(file_id,Ipre_tot_t(1:index_now),index_now,'Ipre_tot_t'//char(0))
@@ -823,14 +949,26 @@ subroutine export_hdf5_restart(node_list,element_list,filename)
   ! Export restart vacuum 
   call export_HDF5_restart_vacuum(file_id, freeboundary, resistive_wall)
 
-  ! -> clode file
+  ! -> close file
   call HDF5_close(file_id)
 
   ! -> Deallocate arrays
   call tr_deallocate(t_x,"x",CAT_UNKNOWN)
   call tr_deallocate(t_values,"values",CAT_UNKNOWN)
   call tr_deallocate(t_deltas,"deltas",CAT_UNKNOWN)
-#ifdef fullmhd
+  if(present(aux_node_list)) then
+    if(export_aux_node_list .and. associated(aux_node_list)) then
+      call tr_deallocate(t_aux_values,"aux_values",CAT_UNKNOWN)
+    endif
+  endif
+#if STELLARATOR_MODEL
+  call tr_deallocate(t_pressure,"pressure",CAT_UNKNOWN)
+  call tr_deallocate(t_r_tor_eq,"r_tor_eq",CAT_UNKNOWN)
+  call tr_deallocate(t_j_field,"j_field",CAT_UNKNOWN)
+  call tr_deallocate(t_b_field,"b_field",CAT_UNKNOWN)
+  call tr_deallocate(t_chi_correction,"chi_correction",CAT_UNKNOWN)
+  call tr_deallocate(t_j_source,"j_source",CAT_UNKNOWN)
+#elif fullmhd
   call tr_deallocate(t_psi_eq,"psi_eq",CAT_UNKNOWN)
   call tr_deallocate(t_Fprof_eq,"Fprof_eq",CAT_UNKNOWN)
 #elif altcs

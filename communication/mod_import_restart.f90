@@ -4,7 +4,7 @@ implicit none
 contains
 !> Imports a restart file written out by the routine export_restart.
 
-subroutine import_restart(node_list, element_list, filename, format_rst, ierr, no_perturbations)
+subroutine import_restart(node_list, element_list, filename, format_rst, ierr, no_perturbations, aux_node_list)
 
   use tr_module
   use data_structure
@@ -17,25 +17,41 @@ subroutine import_restart(node_list, element_list, filename, format_rst, ierr, n
   implicit none
   
   ! --- Routine parameters
-  type(type_node_list),    intent(inout) :: node_list
-  type(type_element_list), intent(inout) :: element_list
-  character*(*)          , intent(in)    :: filename
-  integer,                 intent(out)   :: ierr
-  integer,                 intent(in)    :: format_rst  ! format of restart file 
-  logical, optional,       intent(in)    :: no_perturbations ! don't initialize new harmonics
+  type(type_node_list),         intent(inout)           :: node_list
+  type(type_node_list),pointer, intent(inout), optional :: aux_node_list
+  type(type_element_list),      intent(inout)           :: element_list
+  character*(*)          ,      intent(in)              :: filename
+  integer,                      intent(out)             :: ierr
+  integer,                      intent(in)              :: format_rst  ! format of restart file 
+  logical, optional,            intent(in)              :: no_perturbations ! don't initialize new harmonics
  
   ! --- Local parameters
   type (type_bnd_element_list)           :: bnd_elm_list    
   type (type_bnd_node_list)              :: bnd_node_list 
 
+  ! Initialise basis functions before element tree is populated
+  call initialise_basis()
+  
   if ( rst_hdf5 == 0 ) then
     write(*,*) " Restart from BINARY file " // trim(filename) // '.rst'
-    call import_binary_restart(node_list, element_list, trim(filename)//'.rst', &
-            format_rst, ierr, no_perturbations)
+    if(present(aux_node_list)) then 
+      call import_binary_restart(node_list, element_list, trim(filename)//'.rst', &
+           format_rst, ierr, no_perturbations, aux_node_list)
+   else
+      call import_binary_restart(node_list, element_list, trim(filename)//'.rst', &
+           format_rst, ierr, no_perturbations)
+   endif
+
   else if ( rst_hdf5 == 1 ) then
     write(*,*) " Restart from HDF5 file " // trim(filename) // '.h5'
-    call import_hdf5_restart(node_list, element_list, trim(filename)//'.h5', &
-            format_rst,ierr, no_perturbations)
+    if(present(aux_node_list)) then 
+      call import_hdf5_restart(node_list, element_list, trim(filename)//'.h5', &
+           format_rst,ierr, no_perturbations, aux_node_list)
+   else
+      call import_hdf5_restart(node_list, element_list, trim(filename)//'.h5', &
+           format_rst,ierr, no_perturbations)
+   endif
+ 
   end if
   
   ! --- Required initializations to update equilibrium state
@@ -50,7 +66,7 @@ end subroutine import_restart
 
 !
 ! Import a binary restart file
-subroutine import_binary_restart(node_list, element_list, filename, format_rst, error, no_perturbations)
+subroutine import_binary_restart(node_list, element_list, filename, format_rst, error, no_perturbations, aux_node_list)
 
   use tr_module 
   use data_structure
@@ -62,18 +78,19 @@ subroutine import_binary_restart(node_list, element_list, filename, format_rst, 
   implicit none
   
   ! --- Routine parameters
-  type(type_node_list),    intent(inout) :: node_list
-  type(type_element_list), intent(inout) :: element_list
-  character(len=*),        intent(in)    :: filename
-  integer,                 intent(out)   :: error
-  integer,                 intent(in)    :: format_rst  ! format of restart file
-  logical, optional,       intent(in)    :: no_perturbations ! don't initialize new harmonics
+  type(type_node_list),          intent(inout)           :: node_list
+  type(type_node_list), pointer, intent(inout), optional :: aux_node_list
+  type(type_element_list),       intent(inout)           :: element_list
+  character(len=*),              intent(in)              :: filename
+  integer,                       intent(out)             :: error
+  integer,                       intent(in)              :: format_rst  ! format of restart file
+  logical, optional,             intent(in)              :: no_perturbations ! don't initialize new harmonics
   
   ! --- Local variables
   integer              :: i, j, m, k, n_tor_tmp
   real*8               :: growth_mag, growth_kin, amplitude
   integer, allocatable :: mode_tmp(:)
-  real*8,  allocatable :: values_tmp(:,:,:), deltas_tmp(:,:,:)
+  real*8,  allocatable :: values_tmp(:,:,:), deltas_tmp(:,:,:), aux_values_tmp(:,:,:)
   real*8,  allocatable :: spi_R_arr (:)
   real*8,  allocatable :: spi_Z_arr (:)
   real*8,  allocatable :: spi_phi_arr (:)
@@ -111,6 +128,7 @@ subroutine import_binary_restart(node_list, element_list, filename, format_rst, 
   
   no_pert = .false.
   if ( present(no_perturbations) ) no_pert = no_perturbations
+
 
   error = 0
 
@@ -161,8 +179,9 @@ subroutine import_binary_restart(node_list, element_list, filename, format_rst, 
   read(21) node_list%n_nodes,element_list%n_elements
   read(21) node_list%n_dof
 
+  call init_node_list(node_list, node_list%n_nodes, node_list%n_dof, n_var)
+
   do i=1,node_list%n_nodes
-     
     read(21) node_list%node(i)%x
     read(21) values_tmp
     read(21) deltas_tmp
@@ -190,20 +209,34 @@ subroutine import_binary_restart(node_list, element_list, filename, format_rst, 
       do k=1, n_tor,2
         if (mode_tmp(m) .eq. mode(k)) then
           if ((m .eq. 1) .and. (k.eq.1)) then
-            node_list%node(i)%values(k,:,:) = values_tmp(m,:,:)
-            node_list%node(i)%deltas(k,:,:) = deltas_tmp(m,:,:)
+            node_list%node(i)%values(k,:,:)     = values_tmp(m,:,:)
+            node_list%node(i)%deltas(k,:,:)     = deltas_tmp(m,:,:)
           else
-            node_list%node(i)%values(k-1,:,:) = values_tmp(m-1,:,:)
-            node_list%node(i)%deltas(k-1,:,:) = deltas_tmp(m-1,:,:)
-            node_list%node(i)%values(k,:,:)   = values_tmp(m,:,:)
-            node_list%node(i)%deltas(k,:,:)   = deltas_tmp(m,:,:)
+            node_list%node(i)%values(k-1,:,:)     = values_tmp(m-1,:,:)
+            node_list%node(i)%deltas(k-1,:,:)     = deltas_tmp(m-1,:,:)
+            node_list%node(i)%values(k,:,:)       = values_tmp(m,:,:)
+            node_list%node(i)%deltas(k,:,:)       = deltas_tmp(m,:,:)
           endif
         endif
       enddo
     enddo
   enddo
 
+#if STELLARATOR_MODEL
+  do i = 1, element_list%n_elements
+    read(21) element_list%element(i)%vertex             
+    read(21) element_list%element(i)%neighbours
+    read(21) element_list%element(i)%size
+    read(21) element_list%element(i)%father
+    read(21) element_list%element(i)%n_sons
+    read(21) element_list%element(i)%n_gen
+    read(21) element_list%element(i)%sons
+    read(21) element_list%element(i)%contain_node
+    read(21) element_list%element(i)%nref
+  enddo
+#else
   read(21) element_list%element(1:element_list%n_elements)
+#endif
   read(21) tstep,eta_rst,visco_rst,visco_par_rst
   read(21) index_start
   read(21) t_start
@@ -445,6 +478,22 @@ subroutine import_binary_restart(node_list, element_list, filename, format_rst, 
     call tr_allocate(mag_ener_src_tot,1,index_start+nstep,"mag_ener_src_tot",CAT_UNKNOWN)
     mag_ener_src_tot = 0.d0
     
+    if (allocated(Px_t)) call tr_deallocate(Px_t,"Px_t",CAT_UNKNOWN)
+    call tr_allocate(Px_t,1,index_start+nstep,"Px_t",CAT_UNKNOWN)
+    Px_t = 0.d0
+    
+    if (allocated(Py_t)) call tr_deallocate(Py_t,"Py_t",CAT_UNKNOWN)
+    call tr_allocate(Py_t,1,index_start+nstep,"Py_t",CAT_UNKNOWN)
+    Py_t = 0.d0
+    
+    if (allocated(dPx_dt)) call tr_deallocate(dPx_dt,"dPx_dt",CAT_UNKNOWN)
+    call tr_allocate(dPx_dt,1,index_start+nstep,"dPx_dt",CAT_UNKNOWN)
+    dPx_dt = 0.d0
+    
+    if (allocated(dPy_dt)) call tr_deallocate(dPy_dt,"dPy_dt",CAT_UNKNOWN)
+    call tr_allocate(dPy_dt,1,index_start+nstep,"dPy_dt",CAT_UNKNOWN)
+    dPy_dt = 0.d0
+
 #ifdef WITH_Refluid
     if (allocated(re_current_t)) call tr_deallocate(re_current_t,"re_current_t",CAT_UNKNOWN)
     call tr_allocate(re_current_t,1,index_start+nstep,"re_current_t",CAT_UNKNOWN)
@@ -735,9 +784,10 @@ endif
       endif
 
       allocate(node_list_perturbation, element_list_perturbation)
-      
+
       read(21) node_list_perturbation%n_nodes,element_list_perturbation%n_elements
       read(21) node_list_perturbation%n_dof
+      call init_node_list(node_list_perturbation, node_list_perturbation%n_nodes, node_list_perturbation%n_dof, n_var)
 
       do i=1,node_list_perturbation%n_nodes
 
@@ -835,9 +885,9 @@ endif
   !call add_pellet(node_list,element_list,25.d0,0.06d0,0.03d0,3.78d0,0.14d0)
 
   ! -> Deallocate temporary arrays 
-  if (allocated(mode_tmp))   call tr_deallocate(mode_tmp,"mode_tmp",CAT_UNKNOWN)
-  if (allocated(values_tmp)) call tr_deallocate(values_tmp,"values_tmp",CAT_UNKNOWN)
-  if (allocated(deltas_tmp)) call tr_deallocate(deltas_tmp,"deltas_tmp",CAT_UNKNOWN)
+  if (allocated(mode_tmp))       call tr_deallocate(mode_tmp,"mode_tmp",CAT_UNKNOWN)
+  if (allocated(values_tmp))     call tr_deallocate(values_tmp,"values_tmp",CAT_UNKNOWN)
+  if (allocated(deltas_tmp))     call tr_deallocate(deltas_tmp,"deltas_tmp",CAT_UNKNOWN)
 
   call populate_element_rtree(node_list, element_list)
   
@@ -849,7 +899,7 @@ end subroutine import_binary_restart
 
 !
 ! Import an HDF5 restart file
-subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, error, no_perturbations)
+subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, error, no_perturbations, aux_node_list)
 
 #include "version.h"
 
@@ -868,12 +918,13 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   implicit none
   
   ! --- Routine parameters
-  type(type_node_list),    intent(inout) :: node_list
-  type(type_element_list), intent(inout) :: element_list
-  character(len=*),        intent(in)    :: filename
-  integer,                 intent(in)    :: format_rst  ! format of restart file
-  integer,                 intent(out)   :: error
-  logical, optional,       intent(in)    :: no_perturbations ! don't initialize new harmonics
+  type(type_node_list),         intent(inout)           :: node_list
+  type(type_node_list),pointer, intent(inout), optional :: aux_node_list
+  type(type_element_list),      intent(inout)           :: element_list
+  character(len=*),             intent(in)              :: filename
+  integer,                      intent(in)              :: format_rst  ! format of restart file
+  integer,                      intent(out)             :: error
+  logical, optional,            intent(in)              :: no_perturbations ! don't initialize new harmonics
   
   ! --- Perturbation-Import variables
   type (type_node_list)   , pointer	:: node_list_perturbation
@@ -885,7 +936,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
 
   ! --- Local variables
   integer              :: i, j, m, k, n_tor_tmp, n_coord_tor_tmp, jorek_model_tmp, n_var_tmp, n_order_tmp, n_period_tmp, rst_hdf5_version_tmp
-  integer              :: n_plane_tmp, n_vertex_max_tmp, n_nodes_max_tmp, n_elements_max_tmp,n_boundary_max_tmp
+  integer              :: n_plane_tmp, n_vertex_max_tmp, n_nodes_max_tmp, n_elements_max_tmp,n_boundary_max_tmp, n_nodes_tmp, n_dof_tmp
   integer              :: n_pieces_max_tmp, n_degrees_tmp, nref_max_tmp, n_ref_list_tmp, n_new_modes
   real*8               :: growth_mag, growth_kin, amplitude
   integer, allocatable :: mode_tmp(:), new_mode(:)
@@ -896,10 +947,19 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
 #ifdef USE_HDF5
   integer(HID_T)     :: file_id, datatype, dataset
   integer            :: ind, n_spi_check, n_inj_check
+  character          :: t_current_prof_initialized
   
   real(RKIND), allocatable :: t_x(:,:,:,:)
   real(RKIND), allocatable :: t_values(:,:,:,:)
   real(RKIND), allocatable :: t_deltas(:,:,:,:)
+  real(RKIND), allocatable :: t_aux_values(:,:,:,:)
+
+  real(RKIND), allocatable :: t_pressure(:,:)
+  real(RKIND), allocatable :: t_r_tor_eq(:,:)
+  real(RKIND), allocatable :: t_j_field(:,:,:,:)
+  real(RKIND), allocatable :: t_b_field(:,:,:,:)
+  real(RKIND), allocatable :: t_chi_correction(:,:,:)
+  real(RKIND), allocatable :: t_j_source(:,:,:)
 
   real(RKIND), allocatable :: t_psi_eq(:,:)
   real(RKIND), allocatable :: t_Fprof_eq(:,:)
@@ -946,7 +1006,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   integer,allocatable :: plasmoid_in_domain_arr (:)
 
   integer :: err_exists, dterr, n_spi_begin, i_inj
-  logical :: flag_exists, type_match
+  logical :: flag_exists, type_match, aux_values_read
 
   real*8, allocatable :: t_energies(:,:,:)   !< Magnetic and kinetic mode energies at previous timesteps.
   real*8, allocatable :: t_energies2(:,:,:)  !< Magnetic and kinetic mode energies at previous timesteps.
@@ -956,10 +1016,11 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   
   no_pert = .false.
   if ( present(no_perturbations) ) no_pert = no_perturbations
-  
-  !
+
 #endif
   error = 0
+
+  
 #ifdef USE_HDF5
 
   ! ->  Reading HDF5 file
@@ -1067,16 +1128,41 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   endif
     
   !write(*,'(2(A,i5))') ' Importing ',n_tor_tmp,' harmonics with n_period=', n_period_tmp 
-
-  call HDF5_integer_reading(file_id,node_list%n_nodes,"n_nodes")
+  call HDF5_integer_reading(file_id,n_nodes_tmp,"n_nodes")
+  call HDF5_integer_reading(file_id,n_dof_tmp,"n_dof")
   call HDF5_integer_reading(file_id,element_list%n_elements,"n_elements")
-  call HDF5_integer_reading(file_id,node_list%n_dof,"n_dof")
+
+  ! initialise and allocate node_list
+  call init_node_list(node_list, n_nodes_tmp, n_dof_tmp, n_var)
+
+
+  aux_values_read = .false.
+  if(present(aux_node_list)) then
+    call h5lexists_f(file_id,'aux_values',flag_exists,err_exists)
+    if(flag_exists .and. err_exists == 0) then
+      aux_values_read = .true.
+      call init_node_list(aux_node_list, n_nodes_tmp, n_dof_tmp, n_aux_var)
+
+    endif
+  endif
 
   ! -> Allocate temporary arrays 
   call tr_allocate(t_x,     1,node_list%n_nodes,1,n_coord_tor_tmp,1,n_degrees_tmp,1,n_dim,         "node_list%x",     CAT_UNKNOWN)
   call tr_allocate(t_values,1,node_list%n_nodes,1,      n_tor_tmp,1,n_degrees_tmp,1,n_var_tmp, "node_list%values",CAT_UNKNOWN)
   call tr_allocate(t_deltas,1,node_list%n_nodes,1,      n_tor_tmp,1,n_degrees_tmp,1,n_var_tmp, "node_list%deltas",CAT_UNKNOWN)
- 
+  if(aux_values_read) then
+    call tr_allocate(t_aux_values,1,aux_node_list%n_nodes,1,n_tor_tmp,1,n_degrees_tmp,1,n_var_tmp, "aux_node_list%values",CAT_UNKNOWN)
+  endif
+   
+#if STELLARATOR_MODEL
+  call tr_allocate(t_r_tor_eq,1,node_list%n_nodes,1,n_degrees_tmp,                              "node_list%r_tor_eq",CAT_UNKNOWN)
+  call tr_allocate(t_pressure,1,node_list%n_nodes,1,n_degrees_tmp,                              "node_list%pressure",CAT_UNKNOWN)
+  call tr_allocate(t_j_field,1,node_list%n_nodes,1,n_coord_tor_tmp,1,n_degrees_tmp,1,n_dim+1,  "node_list%j_field",CAT_UNKNOWN)
+  call tr_allocate(t_b_field,1,node_list%n_nodes,1,n_coord_tor_tmp,1,n_degrees_tmp,1,n_dim+1,    "node_list%b_field",     CAT_UNKNOWN)
+  call tr_allocate(t_chi_correction,1,node_list%n_nodes,1,     n_coord_tor_tmp,1,n_degrees_tmp,            "node_list%chi_correction",CAT_UNKNOWN)
+  call tr_allocate(t_j_source,1,node_list%n_nodes,1,     n_tor_tmp,1,n_degrees_tmp,            "node_list%j_source",CAT_UNKNOWN)
+#endif 
+
 #ifdef fullmhd
   call tr_allocate(t_psi_eq,  1,node_list%n_nodes,1,n_degrees_tmp, "node_list%psi_eq",  CAT_UNKNOWN)
   call tr_allocate(t_Fprof_eq,1,node_list%n_nodes,1,n_degrees_tmp, "node_list%Fprof_eq",CAT_UNKNOWN)
@@ -1111,7 +1197,26 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
     call HDF5_array3D_reading(file_id,t_x(:,1,:,:),        'x')
   endif
   call HDF5_array4D_reading(file_id,t_values,   'values')
-  call HDF5_array4D_reading(file_id,t_deltas,   'deltas')
+  if (jorek_model_tmp .eq. 180) then
+    t_deltas = 0.d0 ! There are no meaningful deltas in the stellarator initialization "model" 180
+  else
+    call HDF5_array4D_reading(file_id,t_deltas,   'deltas')
+  end if
+  if(aux_values_read) then
+     call HDF5_array4D_reading(file_id,t_aux_values,   'aux_values')
+  endif
+#if STELLARATOR_MODEL
+  call HDF5_array2D_reading(file_id,t_r_tor_eq, 'r_tor_eq')
+#if JOREK_MODEL == 180
+  call HDF5_array2D_reading(file_id,t_pressure, 'pressure')
+  call HDF5_array4D_reading(file_id,t_j_field,  'j_field')
+  call HDF5_array4D_reading(file_id,t_b_field,   'b_field')
+#endif
+#ifndef USE_DOMM
+  call HDF5_array3D_reading(file_id,t_chi_correction, 'chi_correction')
+#endif
+  call HDF5_array3D_reading(file_id,t_j_source, 'j_source')
+#endif
 
 #ifdef fullmhd
   call HDF5_array2D_reading(file_id,t_psi_eq,   'psi_eq')
@@ -1129,6 +1234,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   call HDF5_array1D_reading     (file_id,t_ref_lambda,  'ref_lambda')
   call HDF5_array1D_reading     (file_id,t_ref_mu,      'ref_mu')
   call HDF5_array1D_reading_char(file_id,t_constrained, 'constrained')
+
 
   ! --- Detect new modes that need to be initialized to noise level
   if (allocated(new_mode))   call tr_deallocate(new_mode,"new_mode",CAT_UNKNOWN)
@@ -1153,7 +1259,6 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
     do j=1,n_degrees_tmp
       node_list%node(i)%x(:,j,:)  = t_x(i,:,j,:) 
     enddo
-
     node_list%node(i)%values = 0.d0 
     node_list%node(i)%deltas = 0.d0 
 
@@ -1162,6 +1267,9 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
         do j=1,n_degrees_tmp 
           if (mode_tmp(m) .eq. mode(k)) then
             if ((m .eq. 1) .and. (k.eq.1)) then
+
+                
+
               node_list%node(i)%values(k,j,1:n_var_tmp)   = t_values(i,m,j,1:n_var_tmp)
               node_list%node(i)%deltas(k,j,1:n_var_tmp)   = t_deltas(i,m,j,1:n_var_tmp)
             else
@@ -1174,6 +1282,52 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
         enddo
       end do
     end do
+
+    if(aux_values_read) then
+     aux_node_list%node(i)%values = 0.d0
+     do m=1,n_tor_tmp,2
+      do k=1, n_tor,2
+        do j=1,n_degrees_tmp 
+          if (mode_tmp(m) .eq. mode(k)) then
+            if ((m .eq. 1) .and. (k.eq.1)) then
+              aux_node_list%node(i)%values(k,j,1:n_var_tmp)   = t_aux_values(i,m,j,1:n_var_tmp)
+            else
+              aux_node_list%node(i)%values(k-1,j,1:n_var_tmp) = t_aux_values(i,m-1,j,1:n_var_tmp)
+              aux_node_list%node(i)%values(k,j,1:n_var_tmp)   = t_aux_values(i,m,j,1:n_var_tmp) 
+            end if
+          end if
+        enddo
+      end do
+     end do
+    endif
+ 
+#if STELLARATOR_MODEL    
+    node_list%node(i)%r_tor_eq = t_r_tor_eq(i,:)
+#if JOREK_MODEL == 180
+    node_list%node(i)%pressure = t_pressure(i,:)
+    node_list%node(i)%b_field  = t_b_field(i,:,:,:)
+    node_list%node(i)%j_field  = t_j_field(i,:,:,:)
+#endif
+#ifndef USE_DOMM
+    node_list%node(i)%chi_correction  = t_chi_correction(i,:,:)
+#endif
+    node_list%node(i)%j_source = 0.d0 
+    do m=1,n_tor_tmp,2
+      do k=1, n_tor,2
+        do j=1,n_degrees_tmp 
+          if (mode_tmp(m) .eq. mode(k)) then
+            if ((m .eq. 1) .and. (k.eq.1)) then
+              node_list%node(i)%j_source(k,j)             = t_j_source(i,m,j)
+            else
+              node_list%node(i)%j_source(k-1,j)           = t_j_source(i,m-1,j)
+              node_list%node(i)%j_source(k,j)               = t_j_source(i,m,j)
+            end if
+          end if
+        enddo
+      end do
+    end do
+#endif
+
 
     ! --- Split "total" temperature into electron and ion temperature
     if ( import_3xx_4xx ) then
@@ -1239,8 +1393,16 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   call HDF5_real_reading(file_id,visco_rst,'visco')
   call HDF5_real_reading(file_id,visco_par_rst,'visco_par')
   call HDF5_integer_reading(file_id,index_start,'index_now')
+  index_now = index_start
   call HDF5_real_reading(file_id,t_start,'t_now')
+  call HDF5_char_reading(file_id,t_current_prof_initialized,'current_prof_initialized')
+  if (t_current_prof_initialized .eq. 'T') then
+    current_prof_initialized = .true.
+  else
+    current_prof_initialized = .false.
+  end if
   
+
   if (index_start .ge. 1) then
 
     if (allocated(xtime)) call tr_deallocate(xtime,"xtime",CAT_UNKNOWN)
@@ -1583,6 +1745,26 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
     call tr_allocate(density_tot_t,1,index_start+nstep,"density_tot_t",CAT_UNKNOWN)
     density_tot_t = 0.d0
     call HDF5_array1D_reading(file_id,density_tot_t,'density_tot_t')
+    
+    if (allocated(Px_t)) call tr_deallocate(Px_t,"Px_t",CAT_UNKNOWN)
+    call tr_allocate(Px_t,1,index_start+nstep,"Px_t",CAT_UNKNOWN)
+    Px_t = 0.d0
+    call HDF5_array1D_reading(file_id,Px_t,'Px_t')
+    
+    if (allocated(Py_t)) call tr_deallocate(Py_t,"Py_t",CAT_UNKNOWN)
+    call tr_allocate(Py_t,1,index_start+nstep,"Py_t",CAT_UNKNOWN)
+    Py_t = 0.d0
+    call HDF5_array1D_reading(file_id,Py_t,'Py_t')
+    
+    if (allocated(dPx_dt)) call tr_deallocate(dPx_dt,"dPx_dt",CAT_UNKNOWN)
+    call tr_allocate(dPx_dt,1,index_start+nstep,"dPx_dt",CAT_UNKNOWN)
+    dPx_dt = 0.d0
+    call HDF5_array1D_reading(file_id,dPx_dt,'dPx_dt')
+    
+    if (allocated(dPy_dt)) call tr_deallocate(dPy_dt,"dPy_dt",CAT_UNKNOWN)
+    call tr_allocate(dPy_dt,1,index_start+nstep,"dPy_dt",CAT_UNKNOWN)
+    dPy_dt = 0.d0
+    call HDF5_array1D_reading(file_id,dPy_dt,'dPy_dt')
 
 #ifdef WITH_Refluid
     if (allocated(re_current_t)) call tr_deallocate(re_current_t,"re_current_t",CAT_UNKNOWN)
@@ -1594,7 +1776,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
     call tr_allocate(Ipre_tot_t,1,index_start+nstep,"Ipre_tot_t",CAT_UNKNOWN)
     Ipre_tot_t = 0.d0
     call HDF5_array1D_reading(file_id,Ipre_tot_t,'Ipre_tot_t')
-#endif    
+#endif   
 
 #ifdef JECCD                   
     if (allocated(t_energies2))   call tr_deallocate(t_energies2,"t_energies2",CAT_UNKNOWN)
@@ -2022,6 +2204,19 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   call tr_deallocate(t_x,"t_x",CAT_UNKNOWN)
   call tr_deallocate(t_values,"t_values",CAT_UNKNOWN)
   call tr_deallocate(t_deltas,"t_deltas",CAT_UNKNOWN)
+  if(aux_values_read) then
+    call tr_deallocate(t_aux_values,"t_aux_values",CAT_UNKNOWN)
+  endif
+
+#if STELLARATOR_MODEL
+  call tr_deallocate(t_pressure,"t_pressure",CAT_UNKNOWN)
+  call tr_deallocate(t_r_tor_eq,"t_r_tor_eq",CAT_UNKNOWN)
+  call tr_deallocate(t_j_field,"t_j_field",CAT_UNKNOWN)
+  call tr_deallocate(t_b_field,"t_b_field",CAT_UNKNOWN)
+  call tr_deallocate(t_chi_correction,"t_chi_correction",CAT_UNKNOWN)
+  call tr_deallocate(t_j_source,"t_j_source",CAT_UNKNOWN)
+#endif
+
   call tr_deallocate(t_energies,"t_energies",CAT_UNKNOWN)
 
 #ifdef JECCD                   
@@ -2065,6 +2260,10 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   call populate_element_rtree(node_list, element_list)
 
   equil_initialized = .true.
+  write(*,*) ' restart complete '
+
+
+  
 
   return
 end subroutine import_hdf5_restart
@@ -2190,6 +2389,7 @@ subroutine import_hdf5_restart_aux(aux_node_list, filename, format_rst, error)
 
   call HDF5_integer_reading(file_id,aux_node_list%n_nodes,"n_nodes")
   call HDF5_integer_reading(file_id,aux_node_list%n_dof,"n_dof")
+  call init_node_list(aux_node_list, aux_node_list%n_nodes, aux_node_list%n_dof, n_aux_var)
 
   call tr_allocate(t_x, 1,aux_node_list%n_nodes,1,n_coord_tor_tmp,1,n_order+1,1,n_dim_tmp, "aux_node_list%x",     CAT_UNKNOWN)
   call tr_allocate(t_values,1,aux_node_list%n_nodes,1, n_tor_tmp,1,n_order+1,1,n_var_tmp, "aux_node_list%values",CAT_UNKNOWN)

@@ -140,7 +140,7 @@ if (my_id == 0) then
         endif
       endif
     else
-      ES%psi_bnd = 0.d0
+      ES%psi_bnd = ES%psi_lim
     endif
 
     if (.not. xpoint) then
@@ -436,8 +436,8 @@ if (my_id == 0) then
 
   ! --- This fills in the data for the current variable "zj" (for R-MHD only)
 #ifndef fullmhd
+
   do i=1,node_list%n_nodes
-  
     node_list%node(i)%values(1,1,1) = node_list%node(i)%values(1,1,1) - psi_offset_freeb
     psi = node_list%node(i)%values(1,1,1)
     R   = node_list%node(i)%x(1,1,1)
