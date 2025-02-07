@@ -519,20 +519,20 @@ module mod_plasma_functions
 
   !> Determine the Critical eLectric field (input/output in JOREK units)
   ! No option on corrected ion mass and temperature implemented yet <!>
-  pure subroutine E_Cr(T, r0, E_crit)
+  pure subroutine E_Cr(Te, r0, E_crit)
 
     implicit none
     
-    real*8, intent(in)             :: r0                   !< total ion mass density
-    real*8, intent(in)             :: T                    !< electron temperature 
+    real*8, intent(in)             :: r0                   !< total ion mass density in JOREK units
+    real*8, intent(in)             :: Te                   !< electron temperature in JOREK units (corrected)
     real*8                         :: Te_eV
     real*8                         :: ne_20
     real*8                         :: ln_LambdaC
-    real*8, intent(out)            :: E_crit               !< Critical electric field
+    real*8, intent(out)            :: E_crit               !< Critical electric field in JOREK units
 
     ! --- Coulomb logarithm calculated according to Ref. [L. Hesslow et al, J Plasma Phys 84,
     !     p. 905840605 (2018); doi:10.1017/S0022377818001113] Eq. (2.9):
-    Te_eV     = T / ( EL_CHG * MU_ZERO * central_density * 1.d20 )
+    Te_eV     = Te / ( EL_CHG * MU_ZERO * central_density * 1.d20 )
     ne_20     = max(1.d-8, r0) * central_density
     ln_LambdaC  = 14.9 - 0.5 * log( ne_20 ) + log( Te_eV / 1000.d0 ) + 0.5*log(510.999*1.d3/Te_eV)                ! Eq. (2.9) at relativistic energy 
 

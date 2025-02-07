@@ -1226,13 +1226,13 @@ aux_q0    = 0.d0; aux_jx0   = 0.d0; aux_jy0   = 0.d0; aux_jz0   = 0.d0; aux_jz0_
   call coulomb_log_ee_thermal(Te_corr_eV_temp, ne_SI_re/(1.d20*central_density), Clog0)
   call coulomb_log_ee_relativistic(Te_corr_eV_temp, ne_SI_re/(1.d20*central_density), Clogc)
   Epar0 =  E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
-  call E_Cr(Te_corr_eV_temp, ne_SI_re/(1.d20*central_density), Ecrit)
+  call E_Cr(Te0_corr, ne_SI_re/(1.d20*central_density), Ecrit)
   Ecrit = Ecrit / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)  
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
 #ifdef WITH_impurities
     ne_total_si = ne_total_si + central_density*1.d20 * ( beta_imp * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
 #endif
-  call E_Cr(Te_corr_eV_temp, ne_total_si/(1.d20*central_density), Ec_tot)
+  call E_Cr(Te0_corr, ne_total_si/(1.d20*central_density), Ec_tot)
   Ec_tot = Ec_tot / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)  
   
   ! Contribution from neutral deuterium

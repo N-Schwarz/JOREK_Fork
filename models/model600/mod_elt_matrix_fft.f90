@@ -5729,7 +5729,7 @@ implicit none
 
   Epar0 = - F0/sqrt(BB2) * eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 )
   Epar0 = Epar0 / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
-  call E_Cr(Te_corr_eV, ne_SI/(1.d20 * central_density), Ecrit)
+  call E_Cr(Te0_corr, ne_SI/(1.d20 * central_density), Ecrit)
   Ecrit = Ecrit / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
   if (with_impurities) then
