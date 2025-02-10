@@ -881,9 +881,9 @@ module vacuum
         call HDF5_integer_saving(file_id,sr%n_diag_coils,"n_diag_coil"//char(0))
         call HDF5_integer_saving(file_id,sr%n_pol_coils,"n_pf_coil"//char(0))
         call HDF5_integer_saving(file_id,sr%n_rmp_coils,"n_rmp_coil"//char(0))
-        if(sr%n_diag_coils .gt. 0) call HDF5_array1D_saving_char(file_id,diag_coil_name,sr%n_diag_coils*COIL_NAME_LEN,"diag_coil_name"//char(0))
-        if(sr%n_pol_coils  .gt. 0) call HDF5_array1D_saving_char(file_id,pf_coil_name,  sr%n_pol_coils* COIL_NAME_LEN,"pf_coil_name"//char(0))
-        if(sr%n_rmp_coils  .gt. 0) call HDF5_array1D_saving_char(file_id,rmp_coil_name, sr%n_rmp_coils* COIL_NAME_LEN,"rmp_coil_name"//char(0))
+        if(sr%n_diag_coils .gt. 0) call HDF5_array1D_saving_char(file_id,diag_coil_name,sr%n_diag_coils,"diag_coil_name"//char(0))
+        if(sr%n_pol_coils  .gt. 0) call HDF5_array1D_saving_char(file_id,pf_coil_name,  sr%n_pol_coils,"pf_coil_name"//char(0))
+        if(sr%n_rmp_coils  .gt. 0) call HDF5_array1D_saving_char(file_id,rmp_coil_name, sr%n_rmp_coils,"rmp_coil_name"//char(0))
         
 
         if ( index_now > 0) then        
