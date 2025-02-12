@@ -221,9 +221,9 @@ real*8, allocatable :: local_source_volume(:), local_source_volume_drift(:)
 
 #endif
 
+real*8  :: re_current_in, re_current_out, re_current_tot
 #ifdef WITH_Refluid
 real*8  :: Cre_intern, Cre_ext
-real*8  :: re_current_in, re_current_out, re_current_tot
 real*8  :: Vlight, nre0
 #endif
 
@@ -2470,7 +2470,7 @@ kin_perp_tot         = n_period * kin_perp_tot* fact_mu0  * 0.5d0
 kin_perp_in          = n_period * kin_perp_in * fact_mu0  * 0.5d0
 kin_perp_out         = n_period * kin_perp_out* fact_mu0  * 0.5d0
 dEre_dt              = n_period * dEre_dt     * (-1.d0 * fact_mu0 ) / t_norm2
-dEreke_dt            = n_period * dEreke_dt     * (-1.d0 * fact_mu0 ) / t_norm2
+dEreke_dt            = n_period * dEreke_dt   * (-1.d0 * fact_mu0 ) / t_norm2
 mag_tot              = n_period * mag_tot     * fact_mu0  * 0.5d0
 mag_in               = n_period * mag_in      * fact_mu0  * 0.5d0
 mag_out              = n_period * mag_out     * fact_mu0  * 0.5d0
@@ -2524,6 +2524,10 @@ total_P_ion         = n_period * total_P_ion
 re_current_in           = n_period * re_current_in  * fact_mu0  / (2.d0 * PI)
 re_current_out          = n_period * re_current_out * fact_mu0  / (2.d0 * PI)
 re_current_tot  	= re_current_in + re_current_out
+#else
+re_current_in  = 0.d0
+re_current_out = 0.d0
+re_current_tot = 0.d0
 #endif
 
 ! --- Boundary integrals
@@ -2651,10 +2655,10 @@ if (my_id .eq. 0) then
         res(iexpr) = mag_tot
         
       case ( 'dEtot_RE_dt' )
-        res(iexpr+1) = dEre_dt
+        res(iexpr) = dEre_dt
         
       case ( 'dEkin_RE_dt' )
-        res(iexpr+1) = dEreke_dt
+        res(iexpr) = dEreke_dt
 
       case ( 'Wmag_in' )
         res(iexpr) = mag_in 
@@ -2817,10 +2821,11 @@ if (my_id .eq. 0) then
       case ( 'Ip_tot' )
         res(iexpr) = current_tot 
 
-#ifdef WITH_Refluid
       case ( 'Ipre_tot' )
-        res(iexpr+1) = re_current_tot
-#endif
+        res(iexpr) = re_current_tot
+      
+      case ('Ipre_in' )
+        res(iexpr) = re_current_in
 
       case ( 'Ip_in' )
         res(iexpr) = current_in 
@@ -3118,6 +3123,10 @@ if (my_id .eq. 0) then
     npart_flux_t(index_now)          = neut_part_flux 
     Px_t(index_now)                  = Px
     Py_t(index_now)                  = Py
+    Ipre_tot_t(index_now)            = re_current_tot
+    re_current_t(index_now)          = re_current_in
+    !dEtot_RE_dt(index_now)           = dEre_dt
+    !dEkin_RE_dt(index_now)           = dEreke_dt
  
     !--- Calculate time derivatives at previous step (second order accuracy)
     if (index_now > 2) then

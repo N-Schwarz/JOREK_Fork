@@ -341,8 +341,6 @@ module mod_expression
     call add(exprs_all_int, 'q99         ', 'Safety factor at psin=0.99                            ')
     call add(exprs_all_int, 'I_halo      ', 'Total poloidal halo currents                          ')
     call add(exprs_all_int, 'TPF_halo    ', 'Toroidal peaking factor of the poloidal halos         ')
-    call add(exprs_all_int, 'dEtot_RE_dt ', 'Rate of gain of RE total energy                       ')  ! int[ Jre*Epa ]dV  ; total = kinetic + sustenance
-    call add(exprs_all_int, 'dEkin_RE_dt ', 'Rate of gain of RE kinetic energy                     ')  ! int[ Jre*(Epar-Eceff) ]dV
     call add(exprs_all_int, 'LCFS_Rgeo   ', 'Major radius          (as in PPCF 55 (2013) 095009)   ')
     call add(exprs_all_int, 'LCFS_a      ', 'Minor radius          (as in PPCF 55 (2013) 095009)   ')
     call add(exprs_all_int, 'LCFS_epsilon', 'Inverse aspect ratio  (as in PPCF 55 (2013) 095009)   ')
@@ -352,6 +350,10 @@ module mod_expression
     call add(exprs_all_int, 'tot_radiated', 'Total radiated power by the main impurities           ')
     call add(exprs_all_int, 'saw_ene     ', 'SAW energy functional (linear MHD)                    ')
     call add(exprs_all_int, 'int_dBn_norm', 'Surface integral of Bnorm (bn in PoP 28 (2021) 032501)')    
+    call add(exprs_all_int, 'Ipre_tot    ', 'Total toroidal RE current                             ')
+    call add(exprs_all_int, 'Ipre_in     ', 'Toroidal RE current, inside LCFS                      ')
+    call add(exprs_all_int, 'dEtot_RE_dt ', 'Rate of gain of RE total energy                       ')  ! int[ Jre*Epa ]dV  ; total = kinetic + sustenance
+    call add(exprs_all_int, 'dEkin_RE_dt ', 'Rate of gain of RE kinetic energy                     ')  ! int[ Jre*(Epar-Eceff) ]dV
 
     call add(exprs_all_four, 'absolute    ', 'Absolute value of 2D Fourier analysis                 ')
     call add(exprs_all_four, 'real        ', 'Real part      of 2D Fourier analysis                 ')
