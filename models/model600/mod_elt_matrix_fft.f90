@@ -5724,8 +5724,8 @@ implicit none
   !*********************************
   
   ! Thermal and Relativistic Coulomb logarithms
-  call coulomb_log_ee_thermal(Te_corr_eV, ne_SI/(1.d20 * central_density), Clog0)
-  call coulomb_log_ee_relativistic(Te_corr_eV, ne_SI/(1.d20 * central_density), Clogc)
+  call coulomb_log_ee_thermal(Te0_corr, ne_SI/(1.d20 * central_density), Clog0)
+  call coulomb_log_ee_relativistic(Te0_corr, ne_SI/(1.d20 * central_density), Clogc)
 
   Epar0 = - F0/sqrt(BB2) * eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 )
   Epar0 = Epar0 / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
@@ -5810,7 +5810,7 @@ implicit none
     !Clogee = Clogc + log( sqrt(gamma_of_pstar - 1.d0) )
     !Clogei = Clogc + log( sqrt(2.d0) * pstar_old )  
     gamma_of_pstar = sqrt(1.d0 + pstar_old**2)
-    call coulomb_log_ee(Te_corr_eV, ne_SI/(1.d20 * central_density), pstar_old, Clogee, dClogee_dpstar)
+    call coulomb_log_ee(Te0_corr, ne_SI/(1.d20 * central_density), pstar_old, Clogee, dClogee_dpstar)
     Clogei = Clog0 + 0.2d0 * log ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV * EL_CHG)   )**5.d0 )
     dClogei_dpstar = 0.2d0 / ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV * EL_CHG)   )**5.d0 )  *  (2.d0 * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV * EL_CHG) ) ** 2.5d0  *  ( 5.d0 * pstar_old**4)
     beta_of_pstar = pstar_old**2 / (1.d0 + pstar_old**2)

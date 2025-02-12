@@ -1851,7 +1851,7 @@ max_pstariter = 80
     !Clogee = Clogc + log( sqrt(gamma_of_pstar - 1.d0) )
     !Clogei = Clogc + log( sqrt(2.d0) * pstar_old )  
     gamma_of_pstar = sqrt(1.d0 + pstar_old**2)
-    call coulomb_log_ee(Te_corr_eV_temp, ne_SI_re/(1.d20 *central_density), pstar_old, Clogee, dClogee_dpstar)
+    call coulomb_log_ee(Te0_corr, ne_SI_re/(1.d20 *central_density), pstar_old, Clogee, dClogee_dpstar)
     Clogei = Clog0 + 0.2d0 * log ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV_temp * EL_CHG)   )**5.d0 )
     dClogei_dpstar = 0.2d0 / ( 1.d0 + ( sqrt(2.d0) * pstar_old * sqrt(MASS_ELECTRON * SPEED_OF_LIGHT**2) / sqrt(Te_corr_eV_temp * EL_CHG)   )**5.d0 )  *  (2.d0 * MASS_ELECTRON * SPEED_OF_LIGHT**2 / (Te_corr_eV_temp * EL_CHG) ) ** 2.5d0  *  ( 5.d0 * pstar_old**4)
     beta_of_pstar = pstar_old**2 / (1.d0 + pstar_old**2)

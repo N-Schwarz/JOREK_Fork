@@ -137,8 +137,8 @@ module mod_plasma_functions
 
     implicit none
 
-    real*8, intent(in)             :: r0                   !< total ion mass density
-    real*8, intent(in)             :: T                    !< electron temperature 
+    real*8, intent(in)             :: r0                   !< total ion mass density (JOREK units)
+    real*8, intent(in)             :: T                    !< electron temperature corrected, (JOREK units) 
     real*8                         :: Te_eV
     real*8                         :: ne_20
     real*8, intent(out)            :: ln_Lambda0
@@ -161,8 +161,8 @@ module mod_plasma_functions
 
     implicit none
 
-    real*8, intent(in)             :: r0                   !< total ion mass density
-    real*8, intent(in)             :: T                    !< electron temperature 
+    real*8, intent(in)             :: r0                   !< total ion mass density, (JORK units)
+    real*8, intent(in)             :: T                    !< electron temperature corrected, (JORK units)
     real*8                         :: Te_eV
     real*8                         :: ne_20
     real*8, intent(out)            :: ln_LambdaC
@@ -188,7 +188,7 @@ module mod_plasma_functions
     real*8, intent(in)             :: r0                   !< total ion mass density
     real*8, intent(in)             :: T                    !< electron temperature 
     real*8, intent(in)             :: pstar                !< Normalized momentum (=p/mc)
-    real*8                         :: Te_eV
+    real*8                         :: Te_eV                !< Electron temperature in JOREK units, corrected
     real*8                         :: ne_20
     real*8                         :: ln_Lambda0 
     real*8                         :: gamma
@@ -495,7 +495,7 @@ module mod_plasma_functions
     implicit none
     
     real*8, intent(in)             :: r0                   !< total ion mass density
-    real*8, intent(in)             :: T                    !< electron temperature 
+    real*8, intent(in)             :: T                    !< electron temperature corrected (JOREK units)
     real*8                         :: Te_eV
     real*8                         :: ne_20
     real*8                         :: ln_Lambda0
