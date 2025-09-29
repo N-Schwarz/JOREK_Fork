@@ -93,6 +93,7 @@ real*8                :: psi_norm, psi_bnd, grad_psi
 real*8                :: J_phi, J_R, J_Z, eta_T
 real*8                :: E_phi, E_R, E_Z, dU_x, dU_y, Jpol_R, Jpol_Z, FFp
 real*8                :: xjac, xjac_x, xjac_y, v_perp, Psi_J, R_p, error, Btot, BigR, BB2_zero, Bv2, grad_chi(3)
+real*8, allocatable   :: BigR_array(:)
 real*8                :: particle_source, D_prof, ZK_prof, source_pellet, ZKpar_T
 real*8                :: Jb,rho_norm,t_norm
 integer               :: i_elm_axis, i_elm_xpoint(2), k_tor, ifail, ierr
@@ -125,7 +126,6 @@ character*36          :: imp_label, proj_label
 real*8                :: Vlight
 
 real*8, dimension(0:n_order-1,0:n_order-1,0:n_order-1) :: chi, chi_corr
-
 #ifdef WITH_Impurities
 ! See https://www.jorek.eu/wiki/doku.php?id=model500_501_555 for details
 ! Atomic physics coefficients:
@@ -196,6 +196,7 @@ allocate(aux_node_list)
 allocate(element_list)
 allocate(bnd_elm_list)
 allocate(bnd_node_list)
+
 
 ! --- Initialise input parameters and read the input namelist.
 my_id     = 0
@@ -493,6 +494,9 @@ nnos = nsub*nsub*element_list%n_elements
 allocate(currdens(nnos),xyz(3,nnos),scalars(nnos,1:n_scalars),vectors(nnos,3,1:n_vectors))
 currdens = 0.
 
+allocate(BigR_array(nnos))
+BigR_array = 0.
+
 nnoel = 4
 nel   = (nsub-1)*(nsub-1)*element_list%n_elements
 allocate(ien(nnoel,nel))
@@ -552,7 +556,7 @@ do i=1,element_list%n_elements
       if ( xjac == 0.d0 ) xjac = 1.d-8
 
       BigR  = R
-
+      
       xjac_x  = (R_ss*Z_t**2 - Z_ss*R_t*Z_t - 2.d0*R_st*Z_s*Z_t   &
               + Z_st*(R_s*Z_t + R_t*Z_s) + R_tt*Z_s**2 - Z_tt*R_s*Z_s) / xjac
 
@@ -568,6 +572,8 @@ do i=1,element_list%n_elements
       Bv2 = dot_product(grad_chi,grad_chi)
 
       inode = inode+1
+      
+      BigR_array(inode) = R
       
       if (RphiZ_coords) then
         xyz(1:3,inode) = (/ R, 0.d0,    Z /)
@@ -1363,6 +1369,7 @@ do i=1,element_list%n_elements
     enddo  ! nsub
   enddo     ! nsub
 
+
   do j=1,nsub-1
     do k=1,nsub-1
       ielm	  = ielm+1
@@ -1756,7 +1763,7 @@ if (SI_units) then
 
 #ifdef WITH_Refluid
     !===================================== RE density in m-3
-    scalars(i,var_nre) = scalars(i,var_nre) * sqrt(rho_norm / MU_zero) / EL_CHG / BigR 
+    scalars(i,var_nre) = scalars(i,var_nre)* sqrt(rho_norm / MU_zero) / EL_CHG/BigR_array(i)
 #endif
 
     !=====================Pressure in kPa
