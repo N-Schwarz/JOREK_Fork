@@ -1401,7 +1401,6 @@ aux_q0    = 0.d0; aux_jx0   = 0.d0; aux_jy0   = 0.d0; aux_jz0   = 0.d0; aux_jz0_
         VK_tot = VK_tot + r0 * (dudx**2 + dudy**2) * BigR**2 * xjac * BigR * wst * delta_phi
         VM_tot = VM_tot + (dpsidx**2+dpsidy**2)/BigR**2 * xjac * BigR * wst * delta_phi
 #endif
-        J2_tot = J2_tot + eta_T_ohm *(ZJ0/BigR)**2.d0 * xjac * BigR * wst * delta_phi
         
         ! Momentum in the Cartesian x- and y-directions
         momentum_x = momentum_x + r0*(-BigR**2*dudy*cos(phi) - F0*vpar0*sin(phi) + vpar0*dpsidy*cos(phi))*xjac*wst*delta_phi
