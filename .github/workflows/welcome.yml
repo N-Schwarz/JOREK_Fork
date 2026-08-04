@@ -2,7 +2,7 @@ name: Welcome New Pull Request
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, reopened]
 
 permissions:
   pull-requests: write
@@ -20,12 +20,14 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: `👋 Thank you for your pull request!
+              body: `Thank you for your pull request!
 
               Please make sure that:
-              - ✅ Your branch is up to date with the target branch.
-              - ✅ All required checks pass.
-              - ✅ You requested reviews from the at least one of the gatekeepers.
+              - ✅ Your branch is up to date with develop, merge or rebase if necessary.
+              - ✅ All regression tests pass.
+              - ✅ You added at least two reviewers. If you cannot add reviewers, mention one of the contributors in a comment.
+	      - Only gatekeepers have the right to merge ( N. Schwarz, M. Hoelzl, J. Artola, G. Huijsmans ).
+	        Make sure at least one of them is aware of the PR.
 
               Thank you for your contribution!`
             });
