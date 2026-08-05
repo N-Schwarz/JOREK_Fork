@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ github.repository == 'iterorganization/JOREK' }} 
     runs-on: ubuntu-latest
     # The Jekyll site lives in docs/ (source root). Run steps there.
     defaults:
@@ -48,6 +49,7 @@ jobs:
           path: docs/_site
 
   deploy:
+    if: ${{ github.repository == 'iterorganization/JOREK' }} 
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
