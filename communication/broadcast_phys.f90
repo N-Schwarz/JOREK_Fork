@@ -272,7 +272,7 @@ if (my_id .eq. 0) then
   call MPI_PACK(central_density,        1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK(central_mass,           1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
 
-  
+  call MPI_PACK(loop_voltage,           1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)  
   call MPI_PACK(gamma_rel,              1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK(re_initialize,          1,MPI_INTEGER,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK(initial_re_current_fraction,    1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
@@ -299,8 +299,6 @@ if (my_id .eq. 0) then
     call MPI_PACK(deut_inj_flat(i)%rise_time,            1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
     call MPI_PACK(deut_inj_flat(i)%start_time,           1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   end do
-
-  call MPI_PACK(loop_voltage,           1,MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
 
   do i=1,max_bnd_types
     call MPI_PACK(bcs(i)%dirichlet%psi    , 1,MPI_LOGICAL,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
@@ -1289,7 +1287,7 @@ if (my_id .ne. 0) then
   call MPI_UNPACK(buffer,bufsize,position,central_density,        1,MPI_REAL8,MPI_COMM_WORLD,ierr)
   call MPI_UNPACK(buffer,bufsize,position,central_mass,           1,MPI_REAL8,MPI_COMM_WORLD,ierr)
 
-
+  call MPI_UNPACK(buffer,bufsize,position,loop_voltage,           1,MPI_REAL8,MPI_COMM_WORLD,ierr)
   call MPI_UNPACK(buffer,bufsize,position,gamma_rel,              1,MPI_REAL8,MPI_COMM_WORLD,ierr)
   call MPI_UNPACK(buffer,bufsize,position,re_initialize,          1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
   call MPI_UNPACK(buffer,bufsize,position,initial_re_current_fraction,    1,MPI_REAL8,MPI_COMM_WORLD,ierr)
