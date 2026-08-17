@@ -507,7 +507,7 @@ module mod_plasma_functions
     ne_20     = max(1.d-8, r0) * central_density
     ln_Lambda0 = 14.9 - 0.5 * log( ne_20 ) + log( Te_eV / 1000.d0 ) ! Eq. (2.7) at thermal speed
 
-    E_dreic = EL_CHG**3 * ln_Lambda0 * MU_ZERO**1.5 * (central_density*1.d20*central_mass*MASS_PROTON)**2.5 * r0 / ( 2.d0 * PI * EPS_ZERO**2 * (MASS_PROTON*central_mass)**2 * T)
+    E_dreic = EL_CHG**3 * ln_Lambda0 * MU_ZERO**1.5 * (central_density*1.d20*central_mass*atomic_mass_unit)**2.5 * r0 / ( 2.d0 * PI * EPS_ZERO**2 * (atomic_mass_unit*central_mass)**2 * T)
 
   end subroutine E_Dr
   
@@ -536,7 +536,7 @@ module mod_plasma_functions
     ne_20     = max(1.d-8, r0) * central_density
     ln_LambdaC  = 14.9 - 0.5 * log( ne_20 ) + log( Te_eV / 1000.d0 ) + 0.5*log(510.999*1.d3/Te_eV)                ! Eq. (2.9) at relativistic energy 
 
-    E_crit = C_LIGHT**2 * EL_CHG**3 * ln_LambdaC * MU_ZERO**2.5 * (central_density*1.d20*central_mass*MASS_PROTON)**1.5 * r0 / ( 4 * PI * MASS_ELECTRON * MASS_PROTON * central_mass )
+    E_crit = C_LIGHT**2 * EL_CHG**3 * ln_LambdaC * MU_ZERO**2.5 * (central_density*1.d20*central_mass*atomic_mass_unit)**1.5 * r0 / ( 4 * PI * MASS_ELECTRON * atomic_mass_unit * central_mass )
 
   end subroutine E_Cr
 

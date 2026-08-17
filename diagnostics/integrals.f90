@@ -90,7 +90,7 @@ real*8     :: recurrent_in, recurrent_out
 real*8     :: Cre_intern, Cre_ext, Cre_hel
 real*8     :: nre0, Vlight
 
-Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 #endif
 
 write(*,*) '***************************************'

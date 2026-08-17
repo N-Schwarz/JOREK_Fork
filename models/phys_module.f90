@@ -991,9 +991,6 @@ module phys_module
   real*8  :: zjz_0, zjz_1,  zj_coef(10)
   real*8  :: D_neutral
 
-  !> @name Global quantity for REs 
-  real*8, allocatable :: re_current_t(:), Ipre_tot_t(:)
-
   !> @name Wall collision input parameters
   character(len=256)  :: wall_collision_model = 'wall.h5'
   integer(kind=4)     :: max_depth_wall = 6

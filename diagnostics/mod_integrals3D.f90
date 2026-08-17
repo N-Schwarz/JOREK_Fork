@@ -213,7 +213,7 @@ real*8  :: Te_corr_eV
 real*8  :: local_radiation, local_radiation_cooling, local_radiation_bg, local_E_ion, total_radiation, total_radiation_cooling, total_radiation_bg, total_E_ion, local_P_ei, total_P_ei
 real*8  :: local_P_ion, total_P_ion
 real*8  :: local_radiation_phi(n_plane), local_radiation_cooling_phi(n_plane), total_radiation_phi(n_plane), total_radiation_cooling_phi(n_plane)
-real*8  :: ne_SI, Te_eV, Te_corr_eV, Ti_eV
+real*8  :: ne_SI, Te_eV, Ti_eV
 
 ! SPI-related variables
 integer    :: spi_i
@@ -498,7 +498,7 @@ if (.not. allocated(local_source_volume_drift)) allocate (local_source_volume_dr
 #ifdef WITH_Refluid
  Cre_intern = 0.d0
  Cre_ext = 0.d0
- Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+ Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 #endif
 
 delta_phi     = 2.d0 * PI / float(n_plane) / float(n_period)
@@ -589,7 +589,7 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp           eta_T_ohm, rn0, rn0_corr, rimp0, rimp0_corr, Z_eff, lnA, alpha_e,                             &
 !$omp           aux_E0_Ti, aux_E0_Te, aux_E0,                                                                 &
 #if (defined WITH_Neutrals) || (defined WITH_Impurities)
-!$omp           i_imp, frad_bg, Lrad_imp, Te_corr_eV, Te_eV, ne_SI, Ti_eV,                                    &
+!$omp           i_imp, frad_bg, Lrad_imp, Te_eV, ne_SI, Ti_eV,                                    &
 !$omp           spi_R_tmp, spi_Z_tmp, spi_phi_tmp, ns_radius_tmp,                              &
 !$omp           spi_psi_tmp, spi_grad_psi_tmp, spi_i, i_inj,                                   &
 !$omp           n_spi_tmp, source_tmp, ns_shape, ns_shape_drift,                               &
@@ -601,7 +601,7 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp           ne_JOREK, P_imp, Lrad, E_ion, E_ion_bg, ion_i,                                                &
 !$omp           ion_k, Z_eff_imp, eta_coef, Ti_corr_eV,                                                       &
 #endif
-!$omp           Ec_tot, Z_eff_temp, Te_corr_eV_temp, &
+!$omp           Ec_tot, Z_eff_temp, Te_corr_eV, Te_corr_eV_temp, &
 !$omp           ne_total_si,                                                    &
 !$omp           Clog0, Clogc, Clogee, Clogei, dClogee_dpstar, dClogei_dpstar, gamma_of_pstar, beta_of_pstar, Epar0, nus, nud, nusprime, nudprime,&
 !$omp           nus0, nus1, nud0, nud1, phibr0, phibr1, tausync_inv,&
@@ -612,7 +612,7 @@ Tie_min_neg = 0.5*T_min_neg
 !$omp 		sum6, sum6D, sum7, sum7D, paj32, paj32_De,&
 !$omp 		hjk, hjk_De, d_hjkDe_dpstar, d_hjk_dpstar,&
 !$omp 		pstar, pstar_old, funcpstar, derivpstar, nimp_j,&
-!$omp 		S_avalanche, &
+!$omp 		S_avalanche, E_par, ne_SI_re, &
 #ifdef WITH_Refluid                                                                                    
 !$omp           nre0,                                                          &                       
 #endif 
@@ -1307,15 +1307,15 @@ aux_q0    = 0.d0; aux_jx0   = 0.d0; aux_jy0   = 0.d0; aux_jz0   = 0.d0; aux_jz0_
 #if (!defined WITH_TiTe)
   call coulomb_log_ee_thermal(Te0_corr, ne_SI_re/(1.d20*central_density), Clog0)
   call coulomb_log_ee_relativistic(Te0_corr, ne_SI_re/(1.d20*central_density), Clogc)
-  Epar0 =  E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
+  Epar0 =  E_par / sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20)    ! to convert to SI units
   call E_Cr(Te0_corr, ne_SI_re/(1.d20*central_density), Ecrit)
-  Ecrit = Ecrit / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)  
+  Ecrit = Ecrit / sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20)  
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
 #ifdef WITH_impurities
     ne_total_si = ne_total_si + central_density*1.d20 * ( beta_imp * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
 #endif
   call E_Cr(Te0_corr, ne_total_si/(1.d20*central_density), Ec_tot)
-  Ec_tot = Ec_tot / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)  
+  Ec_tot = Ec_tot / sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20)  
   
   ! Contribution from neutral deuterium
   sum1 = ( central_density*1.d20 * rn0 / ne_SI_re ) * float( 1 - 0 )
@@ -1383,7 +1383,7 @@ aux_q0    = 0.d0; aux_jx0   = 0.d0; aux_jy0   = 0.d0; aux_jz0   = 0.d0; aux_jz0_
     
     !write(*,*) Ec_eff !, ne_SI_re, ne_total_SI, rn0, rn0, beta_imp, atomnum_imp
     
-   Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_proton) ! Putting back to JOREK units
+   Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * atomic_mass_unit) ! Putting back to JOREK units
 #endif
 
 #if (! defined WITH_Impurities)

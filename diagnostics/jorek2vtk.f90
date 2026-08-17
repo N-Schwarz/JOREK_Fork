@@ -240,7 +240,7 @@ if (use_imp_adas .and. (nimp_bg(1) > 0.d0)) then
 endif
 #endif
 
-Vlight  = vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+Vlight  = vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 
 
 ! --- Read parameters from namelist file 'vtk.nml' if it exists

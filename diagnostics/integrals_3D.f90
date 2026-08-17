@@ -131,7 +131,7 @@ local_n_particles     = 0.d0
 
 
 #ifdef WITH_Refluid
-Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+Vlight  = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 #endif
 
 Bgeo = F0 / R_geo

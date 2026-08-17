@@ -247,7 +247,7 @@ if ( (my_id .eq. 0) .and. (n_order .le. 3) ) then
     if (with_refluid) then
     
            ! Normalized RE parallel velocity
-           Vlight = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+           Vlight = Vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 
            if( re_initialize .eq. 1 ) then
               !   ### Gaussian profile ### 

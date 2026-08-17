@@ -652,10 +652,8 @@ module mod_expression
     real*8  :: flux_av_fact
 
 #if (defined WITH_Neutrals) || (defined WITH_Impurities)
-    real*8  :: Te_corr_eV, Te_eV
     real*8  :: LradDrays_T, LradDcont_T, LradDcont_corr, Sion_T, Srec_T
     real*8  :: dLradDrays_dT, dLradDcont_dT, dLradDcont_dT_corr, dSion_dT, dSrec_dT
-    real*8  :: ne_SI, ne_JOREK                              ! Electron density used in radiation rate
     real*8  :: Lrad_imp, r_imp_bg, frad_bg
     integer :: i_imp
 #endif
@@ -710,7 +708,7 @@ module mod_expression
     real*8 :: repar_flux, reperp_flux, E_crit_eff
     real*8 :: fact_nre, Vlight
 
-    Vlight = vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+    Vlight = vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 
    ! the variable implies ln(I_j^{-1})
 Iconst_Ar = (/ 7.9d0, 7.8d0, 7.6d0, 7.5d0, 7.3d0, 7.2d0, 7.d0, 6.8d0, 6.6d0, 6.5d0, 6.4d0, 6.2d0, 6.1d0, 5.9d0, 5.7d0, 5.3d0, 4.7d0, 4.7d0 /)
@@ -1803,14 +1801,14 @@ max_pstariter = 80
   call coulomb_log_ee_thermal(Te0_corr, ne_SI_re/(1.d20 *central_density), Clog0)
   call coulomb_log_ee_relativistic(Te0_corr, ne_SI_re/(1.d20 *central_density), Clogc)
   call E_Cr(Te0_corr, ne_SI_re/(1.d20 *central_density), E_crit)
-  Epar0 = E_par / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
-  Ecrit = E_crit / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
+  Epar0 = E_par / sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20)    ! to convert to SI units
+  Ecrit = E_crit / sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20)    ! to convert to SI units
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
 #ifdef WITH_impurities
     ne_total_si = ne_total_si + central_density*1.d20 * ( beta_imp * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
 #endif
   call E_Cr(Te0_corr, ne_total_si/(1.d20 *central_density), Ec_tot)
-  Ec_tot = Ec_tot / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units 
+  Ec_tot = Ec_tot / sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20)    ! to convert to SI units 
   
   ! Contribution from neutral deuterium
   sum1 = ( central_density*1.d20 * rn0 / ne_SI_re ) * float( 1 - 0 )
@@ -1994,15 +1992,15 @@ max_pstariter = 80
   ! Includes the possibility of a negative avalanche source when Epar < Eceff
   if( (with_refluid) .and. ( vpar_re_sign * Epar0 .lt. 0.d0 )  ) then
     S_avalanche = nre0 * EL_CHG / (MASS_ELECTRON * SPEED_OF_LIGHT * Clogc) * (ne_total_si / ne_SI_re) * ( abs(Epar0) - abs(Ec_eff) ) / sqrt( 4.d0 + nus * nud )
-    S_avalanche = sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * S_avalanche  ! time normalization factor coming from dnr/dt
+    S_avalanche = sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20) * S_avalanche  ! time normalization factor coming from dnr/dt
   else
     S_avalanche = 0.d0
   endif
   ! The computed source was in JU
 
-Ecrit  = Ecrit   * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_proton) ! Putting back to JOREK units
-Ec_tot = Ec_tot * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_proton) ! Putting back to JOREK units
-Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * mass_proton) ! Putting back to JOREK units
+Ecrit  = Ecrit   * sqrt(MU_zero * central_density *1.d20 * central_mass * atomic_mass_unit) ! Putting back to JOREK units
+Ec_tot = Ec_tot * sqrt(MU_zero * central_density *1.d20 * central_mass * atomic_mass_unit) ! Putting back to JOREK units
+Ec_eff = Ec_eff * sqrt(MU_zero * central_density *1.d20 * central_mass * atomic_mass_unit) ! Putting back to JOREK units
 #if (defined WITH_Neutrals) || (defined WITH_Impurities)
   ne_SI = ne_SI / 1.d20 / central_density ! Put ne_SI back to JOREK units to have consistent fact_ne factor with other models (see below)
 #endif

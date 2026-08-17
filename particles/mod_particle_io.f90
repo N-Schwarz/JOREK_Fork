@@ -202,7 +202,7 @@ use_hdf5_access_properties,collective_mpio_in,mpi_comm_in,mpi_info_in)
       if(allocated(t_loss_arr)) call HDF5_array1D_saving_native_or_gatherv(&
       file_id,t_loss_arr,n_particles_per_group,trim(group_name)//"t_loss",&
       use_gatherv_mpio,dim1_all_tasks=n_particles_glob(:,ii),&
-      displs=particle_displacement,mpi_rank=sim%my_id,n_cpu=sim%n_cpu,&
+      displs=particle_displacement,mpi_rank=sim%my_id,n_mpi=sim%n_mpi,&
       mpi_comm_loc=mpi_comm_loc,start=[n_particles_offset],&
       use_hdf5_parallel_in=use_hdf5_parallel,mpio_collective_in=collective_mpio_loc)
 

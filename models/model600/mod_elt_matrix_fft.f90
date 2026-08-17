@@ -309,7 +309,7 @@ if (re_trit_seed .eqv. .false.) fact_retrit = 0.d0
 
 Ppar0 = sqrt( gamma_rel**2 - 1.d0 )
 
-Vlight  = vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
+Vlight  = vpar_re_sign * SPEED_OF_LIGHT * sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20) * sqrt ( 1.d0 - 1.d0 / gamma_rel**2 )
 Vlight_adv = re_adv_fact * Vlight
 
 ! the variable implies ln(I_j^{-1})
@@ -1718,7 +1718,7 @@ do i=1,n_vertex_max
             !#  Induction Equation                                                                             #
             !###################################################################################################
 
-nn            rhs_ij(var_psi) = v * eta_T  * (zj0 - Vlight * F0 / (sqrt(BB2)*BigR) * nre0 - current_source(ms,mt) - Jb)/ BigR           * xjac * tstep * factor(var_psi,1) &
+            rhs_ij(var_psi) = v * eta_T  * (zj0 - Vlight * F0 / (sqrt(BB2)*BigR) * nre0 - current_source(ms,mt) - Jb)/ BigR           * xjac * tstep * factor(var_psi,1) &
                       + v * (ps0_s * u0_t - ps0_t * u0_s)                                            * tstep * factor(var_psi,2) &
                       - v * F0 / BigR  * u0_p                                                 * xjac * tstep * factor(var_psi,2) &
                       + eta_num_T * (v_x * zj0_x + v_y * zj0_y)                               * xjac * tstep * factor(var_psi,3) &
@@ -6093,9 +6093,9 @@ implicit none
   call coulomb_log_ee_relativistic(Te0_corr, ne_SI/(1.d20 * central_density), Clogc)
 
   Epar0 = - F0/sqrt(BB2) * eta_T/BigR**2 * ( zj0 - Vlight * F0 /(sqrt(BB2) * BigR) * nre0 )
-  Epar0 = Epar0 / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
+  Epar0 = Epar0 / sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20)    ! to convert to SI units
   call E_Cr(Te0_corr, ne_SI/(1.d20 * central_density), Ecrit)
-  Ecrit = Ecrit / sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20)    ! to convert to SI units
+  Ecrit = Ecrit / sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20)    ! to convert to SI units
   ne_total_si = central_density*1.d20 * ( r0 + rn0 )
   if (with_impurities) then
     ne_total_si = ne_total_si + central_density*1.d20 * ( alpha_e * rimp0 + m_i_over_m_imp*rimp0* ( float(atomnum_imp) - Z_imp) )
@@ -6279,7 +6279,7 @@ implicit none
   ! Includes the possibility of a negative avalanche source when Epar < Eceff
   if( ( vpar_re_sign * Epar0 .lt. 0.d0 )  ) then
     S_avalanche = nre0 * EL_CHG / (MASS_ELECTRON * SPEED_OF_LIGHT * Clogc) * (ne_total_si / ne_SI) * ( abs(Epar0) - abs(Ec_eff) ) / sqrt( 4.d0 + nus * nud )
-    S_avalanche = sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density*1.d20) * S_avalanche  ! time normalization factor coming from dnr/dt
+    S_avalanche = sqrt(MU_ZERO * central_mass * atomic_mass_unit * central_density*1.d20) * S_avalanche  ! time normalization factor coming from dnr/dt
   else
     S_avalanche = 0.d0
   endif
