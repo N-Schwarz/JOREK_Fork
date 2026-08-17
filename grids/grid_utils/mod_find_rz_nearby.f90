@@ -34,7 +34,7 @@ contains
 !! boundaries and the magnetic axis. Here, overshoot of the newton's method near
 !! the element boundary causes errors. If too many elements are crossed, i.e.
 !! element_try_max is exceeded, or if too many iterations are needed, i.e.
-!! newton_iter_max is exceeded, we stop the routine and call find_RZ, which is
+!! find_RZ_nearby_iter is exceeded, we stop the routine and call find_RZ, which is
 !! extremely slow but works for all positions in the domain.
 !! In that case, ifail=2:5 is returned.
 !! If ifail=-1 the particle is lost
@@ -43,6 +43,7 @@ subroutine find_RZ_nearby(node_list, element_list, R_old, Z_old, s_old, t_old, i
 use data_structure
 use mod_neighbours
 use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
+use phys_module, only: find_RZ_nearby_iter, find_RZ_nearby_tol
 implicit none
 !> Input parameters
 type (type_node_list),    intent(in)    :: node_list
@@ -57,27 +58,12 @@ integer,                  intent(out)   :: ifail !< if ifail = -1 the position c
 !< ifail > 0 indicates various other cases
 real*8, optional,         intent(in)    :: phi
 
-!> Accuracy defaults (tolerances are squared!, units of element size)
-real*8,  parameter :: element_tolerance   = 1.d-24 !< Tolerance for finding a position inside an element
-integer, parameter :: newton_iter_max     = 8 !< Number of iterations to try
-
 !> Internal variables
 real*8  :: p              
-integer :: newton_iter_number, i_elm_tmp
+integer :: newton_iter_number, i_elm_tmp, checked_elms
 real*8  :: inv_st_jac_det, R_s, R_t, Z_s, Z_t
 real*8  :: st_step(2), x_step(2), x_tmp(2), st_new(2), x_new(2) ! x_step = (R,Z) of trial position
 real*8  :: err2, err2_old, dist(2), fact
-
-! Check if element is valid
-if (i_elm_old .lt. 1 .or. i_elm_old .gt. element_list%n_elements) then
-#if STELLARATOR_MODEL
-  write(*,*) "ERROR: find_RZ is not implemented for stellarators"
-  stop
-#else
-  call find_RZ(node_list,element_list,R_new,Z_new,x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail)
-  return
-#endif
-end if
 
 if (present(phi)) then
   p = phi
@@ -88,6 +74,17 @@ else
 #endif
   p = 0.0
 endif
+
+! Check if element is valid
+if (i_elm_old .lt. 1 .or. i_elm_old .gt. element_list%n_elements) then
+#if STELLARATOR_MODEL
+  call find_RZP(node_list,element_list,R_new,Z_new,p,x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail, checked_elms)
+  return
+#else
+  call find_RZ (node_list,element_list,R_new,Z_new,  x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail)
+  return
+#endif
+end if
 
 ! Setup initial values
 x_step = [R_old,Z_old] ! start at the current position
@@ -101,7 +98,7 @@ ifail=0
 
 
 ! Newton iteration to find s and t in or out of this element
-do newton_iter_number = 1, newton_iter_max
+do newton_iter_number = 1, find_RZ_nearby_iter
   ! Perform newton iteration by calculating the inverse of the jacobian matrix explicitly
   err2_old = err2
 
@@ -123,12 +120,11 @@ do newton_iter_number = 1, newton_iter_max
     call coord_in_neighbour(node_list,element_list,i_elm_tmp,i_elm_new,st_new)
     if (i_elm_new .lt. 0) then
 #if STELLARATOR_MODEL
-      write(*,*) "ERROR: find_RZ is not implemented for stellarators"
-      stop
+      call find_RZP(node_list,element_list,x_new(1),x_new(2),p,x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail, checked_elms)
 #else
-      call find_RZ(node_list,element_list,x_new(1),x_new(2),x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail)
-      if (ifail .ne. 0) i_elm_new = 0
+      call find_RZ (node_list,element_list,x_new(1),x_new(2),  x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail)
 #endif
+    if (ifail .ne. 0) i_elm_new = 0
     end if
     if (i_elm_new .eq. 0) then ! No element on that side, particle is lost
       i_elm_new = - i_elm_tmp ! Save position of particle
@@ -159,33 +155,39 @@ do newton_iter_number = 1, newton_iter_max
   s_new = st_new(1)
   t_new = st_new(2)
 
-  if (err2 < element_tolerance) exit
+  if (err2 < find_RZ_nearby_tol) exit
 enddo
 
 
 if (ieee_is_nan(err2)) then
 #if STELLARATOR_MODEL
-  write(*,*) "ERROR: find_RZ is not implemented for stellarators"
-  stop
+  call find_RZP(node_list,element_list,x_new(1),x_new(2),p,x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail, checked_elms)
 #else
   !write(*,*) "WARNING: NaN encountered after newton iteration, using find_RZ"
-  call find_RZ(node_list,element_list,x_new(1),x_new(2),x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail)
-  if (ifail .eq. 0) ifail=2
-  return
+  call find_RZ (node_list,element_list,x_new(1),x_new(2),  x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail)
 #endif
+if (ifail .eq. 0) ifail=2
+return
 endif
-if (newton_iter_number .gt. newton_iter_max) then
+if (newton_iter_number .gt. find_RZ_nearby_iter) then
 #if STELLARATOR_MODEL
-  write(*,*) "ERROR: find_RZ is not implemented for stellarators"
-  stop
+  call find_RZP(node_list,element_list,x_new(1),x_new(2),p,x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail, checked_elms)
 #else
-  !write(*,"(A,i4,A,i5,A,2g14.6,A,3g14.6)") "WARNING: iteration for st did not converge after", newton_iter_max, " tries in element ", i_elm_new, &
+  !write(*,"(A,i4,A,i5,A,2g14.6,A,3g14.6)") "WARNING: iteration for st did not converge after", find_RZ_nearby_iter, " tries in element ", i_elm_new, &
   !" using find_RZ", x_new, "err2(old)/convergence: ", err2, err2_old, err2_old/err2
     !write(*,"(A,2g16.8)") "Find_RZ at ", x_new
-  call find_RZ(node_list,element_list,x_new(1),x_new(2),x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail)
-  if (ifail .eq. 0) ifail=3
-  return
+  call find_RZ (node_list,element_list,x_new(1),x_new(2),  x_step(1),x_step(2),i_elm_new,s_new,t_new,ifail)
 #endif
+  if (ifail .eq. 0) then
+    ifail=3
+  else
+    !$omp critical
+      write(*,"(A,2f10.5,A)") "ERROR: issue in mod_find_rz_nearby; could not find ",R_old,Z_old
+      write(*,"(A)") "This position is likely outside of the domain but find_RZ_nearby_iter (namelist input parameter) is not big"
+      write(*,"(A)") "enough to find the domain boundary element closest to it. Consider using a larger find_RZ_nearby_iter."
+    !$omp end critical
+  endif
+  return
 endif
 end subroutine find_RZ_nearby
 

@@ -4,7 +4,7 @@ module mod_atomic_coeff_deuterium
 use mod_openadas
 use constants
 use phys_module, only: central_density, central_mass, gamma, deuterium_adas, deuterium_adas_1e20, old_deuterium_atomic, & 
-                       rho_min, rn0_min
+                       rho_min, rn0_min, ksi_ion
 
 implicit none
 
@@ -27,21 +27,24 @@ contains
 ! ---   * Outputs are the normalized coefficients
 ! ---   * NOTE THAT THE DERIVATIVES ARE WITH RESPECT TO THE ELECTRON TEMPERATURE (not T=Te+Ti)
 ! ---   * The coeffiencts are calculated for ne = 1.e20  m^-3 for the fits
-subroutine atomic_coeff_deuterium(Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradDcont_T, dLradDcont_dT, LradDrays_T, dLradDrays_dT, &
-                                  ne0, rn0, correct_neg ) 
+subroutine atomic_coeff_deuterium(Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradDcont_T, dLradDcont_dT, & 
+                                  LradDcont_corr, dLradDcont_dT_corr, LradDrays_T, dLradDrays_dT, ne0, rn0, correct_neg ) 
 
   implicit none
 
   ! --- Routine parameters
-  real*8, intent(in)    :: Te0                        ! Electron temperature in JOREK units
-  real*8, intent(inout) :: Sion_T, dSion_dT           ! Normalized ionization coefficient and its temperature derivative
-  real*8, intent(inout) :: Srec_T, dSrec_dT           ! Normalized recombination coefficient and its temperature derivative
-  real*8, intent(inout) :: LradDcont_T, dLradDcont_dT ! Normalized Bremss and recomb radiation coefficient and its temperature derivative
-  real*8, intent(inout) :: LradDrays_T, dLradDrays_dT ! Normalized line radiation coefficient and its temperature derivative
-  real*8, optional,  intent(in) :: ne0                ! Electron density in JOREK units (used only for ADAS data)
-  real*8, optional,  intent(in) :: rn0                ! Neutral density, required for corrections                
-  logical, optional, intent(in) :: correct_neg        ! Correct coefficients for small or negative densities?       
-
+  real*8, intent(in)    :: Te0                                 ! Electron temperature in JOREK units
+  real*8, intent(inout) :: Sion_T, dSion_dT                    ! Normalized ionization coefficient and its temperature derivative
+  real*8, intent(inout) :: Srec_T, dSrec_dT                    ! Normalized recombination coefficient and its temperature derivative
+  real*8, intent(inout) :: LradDcont_T, dLradDcont_dT          ! Normalized Bremss and recomb radiation coefficient and its temperature derivative
+  real*8, intent(inout) :: LradDcont_corr, dLradDcont_dT_corr  ! LradDcont_T minus the dielectronic cascade radiation, and its deriv. wrt. T
+                                                               ! this corrected version should be used when calculating energy loss from the 
+                                                               ! plasma as the dielectronic cascade energy should remain in the electron fluid
+  real*8, intent(inout) :: LradDrays_T, dLradDrays_dT          ! Normalized line radiation coefficient and its temperature derivative
+  real*8, optional,  intent(in) :: ne0                         ! Electron density in JOREK units (used only for ADAS data)
+  real*8, optional,  intent(in) :: rn0                         ! Neutral density, required for corrections                
+  logical, optional, intent(in) :: correct_neg                 ! Correct coefficients for small or negative densities?       
+         
   ! --- Local
   real*8 :: coef_ion_1, coef_ion_2, coef_ion_3, T0 
   real*8 :: coef_rad_1, coef_rec_1
@@ -56,19 +59,20 @@ subroutine atomic_coeff_deuterium(Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradD
   real*8 :: rec_log10, drec_log10
   real*8 :: zlt_log10, dzlt_log10
   real*8 :: zrb_log10, dzrb_log10
+  real*8 :: ksi_ion_norm
 
   ! --- Normalization constants
-  rho_norm     = central_density*1.d20 * central_mass * MASS_PROTON
+  rho_norm     = central_density*1.d20 * central_mass * ATOMIC_MASS_UNIT
   t_norm       = sqrt(MU_zero*rho_norm)
   gamma_factor = gamma-1.d0  ! Normalization factor to include terms in the pressure equation
                              ! internal_energy = pressure / (gamma - 1)
 
   Te_eV        = Te0 / (EL_CHG*MU_ZERO*central_density*1.d20)
+  ksi_ion_norm = central_density * 1.d20 * ksi_ion  ! Ionization energy 
 
   if ( (.not. old_deuterium_atomic) .and. (.not. deuterium_adas) ) then 
 
-    ! Fit of ADAS data calculated by Guido, see comparisons in 
-    ! see the public JOREK issue tracker
+    ! Fit of ADAS data calculated by Guido.
 
     Te_eV_lim = max(Te_eV,     0.2d0 )  ! ADAS fit valid between 0.2eV and 10 keV  
     Te_eV_lim = min(Te_eV_lim, 1.d4  )  
@@ -146,13 +150,13 @@ subroutine atomic_coeff_deuterium(Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradD
     ! --- Te_max=10 keV, beyond that value the fits blow up
     T0 = min( T0, 2.d0 * 1.d4 * EL_CHG*MU_ZERO*central_density*1.d20 )
 
-    coef_ion_1  = sqrt(MU_ZERO*central_mass*MASS_PROTON) * (central_density*1.d20)**(1.5d0) * 0.2917d-13
+    coef_ion_1  = sqrt(MU_ZERO*central_mass*ATOMIC_MASS_UNIT) * (central_density*1.d20)**(1.5d0) * 0.2917d-13
     coef_ion_2  = 0.232d0
     coef_ion_3  = EL_CHG*MU_ZERO*central_density*1.d20 * 27.2d0
 
     
-    coef_rad_1  = gamma_factor*MU_ZERO**1.5d0*(central_mass*MASS_PROTON)**0.5d0*(central_density*1.d20)**2.5d0
-    coef_rec_1  = (MU_ZERO*central_mass*MASS_PROTON)**(0.5d0)*(central_density*1.d20)**(1.5d0)   
+    coef_rad_1  = gamma_factor*MU_ZERO**1.5d0*(central_mass*ATOMIC_MASS_UNIT)**0.5d0*(central_density*1.d20)**2.5d0
+    coef_rec_1  = (MU_ZERO*central_mass*ATOMIC_MASS_UNIT)**(0.5d0)*(central_density*1.d20)**(1.5d0)   
 
     ! -------------------------------------------
     ! --- Ionization rate for Deuterium
@@ -209,7 +213,6 @@ subroutine atomic_coeff_deuterium(Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradD
     dLradDcont_dT = dLradDcont_dT * 2.d0
 
   else  ! --- use OPEN ADAS
-
     Te_eV_lim  = max(Te_eV,     0.2d0)  ! ADAS data is given between 0.2eV and 10 keV  
     Te_eV_lim  = min(Te_eV_lim, 1.d4 )  
 
@@ -277,6 +280,10 @@ subroutine atomic_coeff_deuterium(Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradD
       endif
     endif
   endif
+
+  !> correction required to remove dielectronic cascade energy loss
+  LradDcont_corr = LradDcont_T - Srec_T * ksi_ion_norm
+  dLradDcont_dT_corr = dLradDcont_dT - dSrec_dT * ksi_ion_norm
  
 end subroutine
 
@@ -289,6 +296,7 @@ subroutine plot_atomic_coefficients()
   real*8 :: Sion_T, dSion_dT           
   real*8 :: Srec_T, dSrec_dT           
   real*8 :: LradDcont_T, dLradDcont_dT 
+  real*8 :: LradDcont_corr, dLradDcont_dT_corr
   real*8 :: LradDrays_T, dLradDrays_dT 
   real*8 :: Tmin, Tmax, deltaT         
   integer:: i, nT
@@ -305,10 +313,11 @@ subroutine plot_atomic_coefficients()
 
     Te0 = Tmin + (Tmax - Tmin)*float(i-1)/float(nT-1)
 
-    call atomic_coeff_deuterium(Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT,        &
-                                LradDcont_T, dLradDcont_dT, LradDrays_T, dLradDrays_dT ) 
+    call atomic_coeff_deuterium(Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradDcont_T, dLradDcont_dT, &
+                                LradDcont_corr, dLradDcont_dT_corr, LradDrays_T, dLradDrays_dT ) 
 
-     write(29,'(9ES14.6)') Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradDcont_T, dLradDcont_dT, LradDrays_T, dLradDrays_dT
+     write(29,'(9ES14.6)') Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradDcont_T, dLradDcont_dT, LradDcont_corr, &
+                           dLradDcont_dT_corr, LradDrays_T, dLradDrays_dT
 
   enddo
 
@@ -317,15 +326,15 @@ subroutine plot_atomic_coefficients()
 end subroutine
 
 
-subroutine rec_rate_to_kinetic(ne0, Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradDcont_T, dLradDcont_dT) 
-!rec_rate_to_kinetic(Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradDcont_T, dLradDcont_dT, LradDrays_T, dLradDrays_dT, ne0 ) 
+subroutine rec_rate_to_kinetic(ne0, Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, LradDcont_T, dLradDcont_dT, LradDcont_corr, dLradDcont_dT_corr) 
   implicit none
 
   ! --- Routine parameters
   real*8, intent(in)    :: Te0, ne0                        ! Electron temperature in JOREK units
-  real*8, intent(inout) :: Sion_T , dSion_dT           ! Normalized ionization coefficient and its temperature derivative
-  real*8, intent(inout) :: Srec_T , dSrec_dT           ! Normalized recombination coefficient and its temperature derivative
-  real*8,intent(inout) :: LradDcont_T, dLradDcont_dT 
+  real*8, intent(inout) :: Sion_T , dSion_dT               ! Normalized ionization coefficient and its temperature derivative
+  real*8, intent(inout) :: Srec_T , dSrec_dT               ! Normalized recombination coefficient and its temperature derivative
+  real*8,intent(inout)  :: LradDcont_T, dLradDcont_dT
+  real*8,intent(inout)  :: LradDcont_corr, dLradDcont_dT_corr 
   
   ! --- Local
   real*8 :: rho_norm, t_norm
@@ -336,9 +345,10 @@ subroutine rec_rate_to_kinetic(ne0, Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, Lra
   real*8 :: gamma_factor
   real*8 :: ion_log10, dion_log10
   real*8 :: rec_log10, drec_log10
+  real*8 :: ksi_ion_norm 
 
   ! --- Normalization constants
-  rho_norm     = central_density*1.d20 * central_mass * MASS_PROTON
+  rho_norm     = central_density*1.d20 * central_mass * ATOMIC_MASS_UNIT
   t_norm       = sqrt(MU_zero*rho_norm)
   gamma_factor = gamma-1.d0  ! Normalization factor to include terms in the pressure equation
                              ! internal_energy = pressure / (gamma - 1)
@@ -353,6 +363,8 @@ subroutine rec_rate_to_kinetic(ne0, Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, Lra
   ne_si_lim = max(ne_si,  1.d14)    ! ADAS density is bewteen 1.d14 and 1.21 m^-3
   ne_si_lim = min(ne_si_lim,  1.d21) 
   ne_si_log10= log10(ne_si_lim) !< was ne_si
+
+  ksi_ion_norm = central_density * 1.d20 * ksi_ion  ! Ionization energy 
 
 	if (deuterium_adas) then  
 	  call ad_deuterium%scd%interp( 1, ne_si_log10, Te_si_log10, Sion_T, dSion_dT)
@@ -399,34 +411,23 @@ subroutine rec_rate_to_kinetic(ne0, Te0, Sion_T, dSion_dT, Srec_T, dSrec_dT, Lra
     dSrec_dT      = dSrec_dT * t_norm * central_density * 1.d20/ (K_BOLTZ*MU_ZERO*central_density*1.d20)
     dLradDCont_dT = dLradDCont_dT * (central_density * 1.d20)**2 * MU_zero * t_norm * gamma_factor &
                                   / (K_BOLTZ*MU_ZERO*central_density*1.d20)
-    !dLradDrays_dT = dLradDrays_dT * (central_density * 1.d20)**2 * MU_zero * t_norm * gamma_factor & 
-    !                              / (K_BOLTZ*MU_ZERO*central_density*1.d20) ! factor to get the T derivative in JOREK units
-	  
-	  
-	  
-	!Srec_T        = Srec_T   * 100 
-	!dSrec_dT      = dSrec_dT * 100
-	  
-	  
-	  
-		! --- Transform the coefficients to JOREK units
-	!	Sion_T        = Sion_T   * t_norm * central_density * 1.d20
-	!	Srec_T        = Srec_T   * t_norm * central_density * 1.d20
-	!    dSion_dT      = dSion_dT * t_norm * central_density * 1.d20/ (K_BOLTZ*MU_ZERO*central_density*1.d20)
-	!    dSrec_dT      = dSrec_dT * t_norm * central_density * 1.d20/ (K_BOLTZ*MU_ZERO*central_density*1.d20)
+
+    !> correction required to remove dielectronic cascade energy loss
+    LradDcont_corr = LradDcont_T - Srec_T * ksi_ion_norm
+    dLradDcont_dT_corr = dLradDcont_dT - dSrec_dT * ksi_ion_norm
+
 	else
     !write(*,*) "======================== WARNING ===================="
     !write(*,*) "Deuterium_adas = .false. , Adas coefficients are not loaded"
 	!	write(*,*) "This will results in Srec = Sion = 0"
-		Sion_T = 0.d0
-		Srec_T = 0.d0 !0.d0 !0.d0
-	  LradDcont_T   = 0.d0
-	  dLradDcont_dT = 0.d0
-	  !LradDrays_T   = 0.d0
-	  !dLradDrays_dT = 0.d0
-	  dSrec_dT      = 0.d0
-	  !Sion_T        = 0.d0
-	  dSion_dT      = 0.d0
+		Sion_T             = 0.d0
+		Srec_T             = 0.d0
+	  LradDcont_T        = 0.d0
+	  dLradDcont_dT      = 0.d0
+    LradDcont_corr     = 0.d0
+    dLradDcont_dT_corr = 0.d0
+	  dSrec_dT           = 0.d0
+	  dSion_dT           = 0.d0
 	endif !deuterium_adas
   
 end subroutine !rec_rate_to_kinetic

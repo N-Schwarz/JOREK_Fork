@@ -14,7 +14,7 @@ module mod_rng
   end type
 
   interface
-    subroutine initialize(rng, n_dims, seed, n_streams, i_stream, ierr)
+    subroutine initialize(rng, n_dims, seed, n_streams, i_stream, ierr, round_off_n_streams_in)
       import :: type_rng
       implicit none
       class(type_rng), intent(inout) :: rng
@@ -22,6 +22,7 @@ module mod_rng
       integer, intent(in)  :: seed !< Seed for the RNG if required
       integer, intent(in)  :: n_streams !< Number of output streams needed
       integer, intent(in)  :: i_stream !< Index of this output stream (1<=i_stream<=n_streams)
+      logical, intent(in),  optional :: round_off_n_streams_in !< If true, n_streams is rounded-off to 2**ceil
       integer, intent(out), optional :: ierr !< Error code. If present, return on error, otherwise call mpi_abort
     end subroutine initialize
 
@@ -54,10 +55,10 @@ subroutine setup_shared_rngs(n_dim, seed, rng_type, rngs)
 
   integer :: i, n_stream, n_streams_total
   integer, allocatable :: n_streams(:)
-  integer :: my_id, n_cpu, ierr
+  integer :: my_id, n_mpi, ierr
 
   call MPI_Comm_Rank(MPI_COMM_WORLD, my_id, ierr)
-  call MPI_Comm_Size(MPI_COMM_WORLD, n_cpu, ierr)
+  call MPI_Comm_Size(MPI_COMM_WORLD, n_mpi, ierr)
 
   call MPI_Bcast(seed, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
 
@@ -66,7 +67,7 @@ subroutine setup_shared_rngs(n_dim, seed, rng_type, rngs)
 
   ! Get the total number of streams necessary
   ! this supports having a nonuniform number of openmp streams per mpi process. why not.
-  allocate(n_streams(n_cpu))
+  allocate(n_streams(n_mpi))
   call MPI_AllGather(n_stream, 1, MPI_INTEGER, n_streams, 1, MPI_INTEGER, MPI_COMM_WORLD, ierr)
   n_streams_total = sum(n_streams,1)
 

@@ -19,14 +19,16 @@ integer :: ierr,err,i
 ! --- Namelist with input parameters.
 namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 rst_hdf5, rst_hdf5_version, keep_current_prof,      &
-                eta, visco, visco_par,                              &
+                init_current_prof, eta, visco, visco_par,           &
                 restart, rst_format, regrid, bootstrap, write_ps,   &
-                force_horizontal_Xline,                             &
+                bootstrap_psin_cutoff,                              &
+                regrid_from_rz, force_horizontal_Xline,             &
                 n_R, n_Z, n_radial, n_pol, n_tht, n_flux,           &
                 n_open, n_private, n_leg, n_ext, i_plane_rtree,     &
                 n_outer, n_inner, n_up_priv, n_up_leg, m_pol_bc,    &
                 SDN_threshold,                                      &
                 psi_axis_init, XR_r, SIG_r, XR_tht, SIG_tht,        &
+                xr_closed,                                          &
                 SIG_closed, SIG_open, SIG_private, SIG_theta,       &
                 SIG_leg_0, SIG_leg_1, dPSI_open, dPSI_private,      &
                 SIG_up_leg_0, SIG_up_leg_1, SIG_up_priv,            &
@@ -39,7 +41,8 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 R_boundary, Z_boundary, psi_boundary, n_boundary,   &
                 n_pfc, n_tor_fft_thresh, manipulate_psi_map,        &
                 Rmin_pfc, Rmax_pfc, Zmin_pfc, Zmax_pfc, current_pfc,&
-                tokamak_device, gvec_grid_import,                   &
+                tokamak_device, gvec_grid_import, extended_boundary,&
+                j_cutoff_rcoord, j_cutoff_sig, bloating_factor,     &
                 F0, gamma_sheath, density_reflection,               &
                 zjz_0, zjz_1, zj_coef,                              &
                 rho_0, rho_1, rho_coef,                             &
@@ -71,11 +74,12 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 wall_resistivity, wall_resistivity_fact,            &
                 bc_natural_open,                                    &
                 use_mumps_eq, use_pastix_eq, use_strumpack_eq,      &
+                use_mumps_prj, use_pastix_prj, use_strumpack_prj,   &
                 use_mumps, mumps_ordering,                          &
                 use_BLR_compression, epsilon_BLR, just_in_time_BLR, &
                 use_pastix, use_murge, use_murge_element, use_wsmp, &
                 refinement, force_central_node,    &
-                fix_axis_nodes,                                     &
+                fix_axis_nodes, treat_axis,                         &
                 grid_to_wall, use_strumpack,                        &
                 adaptive_time, equil, bench_without_plot,           &
                 eta_T_dependent, visco_T_dependent,                 &
@@ -102,7 +106,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 V_0,V_1,V_coef, output_bnd_elements,                &
                 wall_file,                                          &
                 n_limiter, R_limiter, Z_limiter,                    &
-                first_target_point, last_target_point,		    &
+                first_target_point, last_target_point,              &
                 NEO, neo_file, aki_neo_const, amu_neo_const,        &
                 time_evol_scheme, corr_neg_temp_coef,               &
                 corr_neg_dens_coef, D_prof_neg, ZK_prof_neg,        &
@@ -124,7 +128,8 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 mode_families_modes, n_mode_families,               &
                 weights_per_family, autodistribute_ranks,           &
                 ranks_per_family,                                   &
-                use_manual_random_seed, manual_seed                
+                use_manual_random_seed, manual_seed,                &
+                use_fixed_rng_value, fixed_rng_value                                
 
                 
 namelist /dommcoef/  R_domm, dcoef
@@ -154,6 +159,13 @@ if (my_id .eq. 0) then
     read(5,in1)
   endif
 
+
+  if ( ( n_tor .eq. 1 ) .and. freeboundary .and. (.not. freeboundary_equil) ) then
+    write(*,*) 'WARNING: The parameter freeboundary is automatically changed to .false. since n_tor==1 and freeboundary_equil is .false.'
+    freeboundary= .false.
+  end if
+
+  
  !==============================R_Z_psi_bnd==========================
    if ( (n_boundary.ne.0) .and. (R_Z_psi_bnd_file /= 'none') ) then
  ! --- Open the file.
@@ -231,6 +243,24 @@ if (domm .and. my_id .eq. 0 ) then
     stop
   end if
 end if
+
+#ifdef USE_DOMM
+! Runtime check: If compiled with USE_DOMM, vacuum field representation uses ONLY Dommaschk potentials (no FE correction)
+! This requires domm_file to provide dcoef array. Without it, dcoef=0 causes NaN in field calculations.
+if (.not. domm .and. my_id .eq. 0) then
+  write(*,*) '**************************************************************************'
+  write(*,*) 'WARNING: Compiled with USE_DOMM=1 (Dommaschk-only vacuum field)'
+  write(*,*) '         but domm_file="', trim(domm_file), '"'
+  write(*,*) '         Vacuum field will be ZERO (dcoef array uninitialized)!'
+  write(*,*) '         This will cause NaN in field line tracing and Poincare plots.'
+  write(*,*) ''
+  write(*,*) 'SOLUTION: Either:'
+  write(*,*) '  1. Provide domm_file with Dommaschk coefficients in namelist'
+  write(*,*) '  2. Recompile with USE_DOMM=0 to use GVEC import + FE correction'
+  write(*,*) '**************************************************************************'
+  stop
+end if
+#endif
   
 ! --- TiTe_ratio has to be between 1 and 0
 if ((with_TiTe) .and. (my_id .eq. 0)) then

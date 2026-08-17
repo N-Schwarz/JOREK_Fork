@@ -9,11 +9,13 @@ use data_structure
 use mod_particle_types
 implicit none
 private
+include 'dmumps_struc.h'        ! MUMPS include files defining its datastructure  implicit none
 public :: default_flux_grid,default_square_grid,default_polar_grid
 public :: project_f,broadcast_dmumps_struct_A_irn_jcn
 public :: broadcast_dmumps_project_struct,calc_rhs_f
 public :: elements_mean_rms,close_dmumps
 public :: f_0,f_1,f_R,f_RZ,f_R4,f_a2
+public :: map_matrix_to_MUMPS_datastructure
 
 !> Variables ------------------------------------------------------
 logical,parameter :: nice_q=.true.
@@ -66,7 +68,7 @@ nx,ny,Rbegin,Rend,Zbegin,Zend)
 end subroutine initialize_square_grid_parameters
 
 !> Create a simple square grid with n nodes in each dimension
-subroutine default_square_grid(my_id,n_cpu,nx,ny,node_list,&
+subroutine default_square_grid(my_id,n_mpi,nx,ny,node_list,&
 element_list,ifail,Rbegin_in,Rend_in,Zbegin_in,Zend_in,&
 bnd_node_list_out,bnd_element_list_out)
   use mpi_mod
@@ -81,7 +83,7 @@ bnd_node_list_out,bnd_element_list_out)
   type(type_element_list),intent(inout) :: element_list
   type(type_bnd_node_list),intent(out),optional    :: bnd_node_list_out
   type(type_bnd_element_list),intent(out),optional :: bnd_element_list_out
-  integer, intent(in)                   :: nx,ny,my_id,n_cpu
+  integer, intent(in)                   :: nx,ny,my_id,n_mpi
   real*8,intent(in),optional            :: Rbegin_in,Rend_in
   real*8,intent(in),optional            :: Zbegin_in,Zend_in
   type(type_bnd_node_list)              :: bnd_node_list
@@ -93,13 +95,13 @@ bnd_node_list_out,bnd_element_list_out)
   Zbegin = -5d-1; if(present(Zbegin_in)) Zbegin = Zbegin_in;
   Zend   = 5d-1;  if(present(Zend_in))   Zend   = Zend_in;
   !> compute gridi
-  call tr_meminit(my_id,n_cpu) !< initialise memory tracing
+  call tr_meminit(my_id,n_mpi) !< initialise memory tracing
   call preset_parameters()
   call initialize_square_grid_parameters(nx,ny,Rbegin,Rend,Zbegin,Zend)
   call det_modes(); call initialise_basis()
   call broadcast_phys(my_id)
   call tr_resetfile()
-  call initial_grid(node_list,element_list,bnd_node_list,bnd_elm_list,my_id,n_cpu)
+  call initial_grid(node_list,element_list,bnd_node_list,bnd_elm_list,my_id,n_mpi)
   call broadcast_boundary(my_id,bnd_elm_list,bnd_node_list)
   call broadcast_elements(my_id,element_list)
   call broadcast_nodes(my_id,node_list)
@@ -122,7 +124,7 @@ end subroutine initialize_polar_grid_parameters
 
 !> Create a simple polar grid with npol nodes in the poloidal direction, 30 radial
 !> volume = 2 pi^2 R a^2
-subroutine default_polar_grid(my_id,n_cpu,npol,nrad,node_list,element_list,ifail,&
+subroutine default_polar_grid(my_id,n_mpi,npol,nrad,node_list,element_list,ifail,&
  bnd_node_list_out,bnd_element_list_out)
   use mpi_mod
   use phys_module
@@ -134,18 +136,18 @@ subroutine default_polar_grid(my_id,n_cpu,npol,nrad,node_list,element_list,ifail
   integer,intent(inout)                  :: ifail
   type(type_node_list), intent(inout)    :: node_list
   type(type_element_list), intent(inout) :: element_list
-  integer,intent(in)                     :: my_id,n_cpu,npol,nrad
+  integer,intent(in)                     :: my_id,n_mpi,npol,nrad
   type(type_bnd_node_list),intent(out),optional    :: bnd_node_list_out
   type(type_bnd_element_list),intent(out),optional :: bnd_element_list_out
   type(type_bnd_node_list)               :: bnd_node_list
   type(type_bnd_element_list)            :: bnd_elm_list
-  call tr_meminit(my_id,n_cpu) !< initialise memory tracing
+  call tr_meminit(my_id,n_mpi) !< initialise memory tracing
   call preset_parameters()
   call initialize_polar_grid_parameters(npol,nrad)
   call det_modes(); call initialise_basis();
   call broadcast_phys(my_id)
   call tr_resetfile()
-  call initial_grid(node_list,element_list,bnd_node_list,bnd_elm_list,my_id,n_cpu)
+  call initial_grid(node_list,element_list,bnd_node_list,bnd_elm_list,my_id,n_mpi)
   call broadcast_boundary(my_id,bnd_elm_list,bnd_node_list)
   call broadcast_elements(my_id,element_list)
   call broadcast_nodes(my_id,node_list)
@@ -263,7 +265,7 @@ end subroutine set_test_equilibrium_parameters
 
 !> Create a simple flux aligned grid with npol nodes in the poloidal direction, 40 radial
 !> by calculating equilibrium and creating flux aligned grid (like in jorek2_main)
-subroutine default_flux_grid(my_id,n_cpu,npol,nrad,node_list,element_list,ifail,&
+subroutine default_flux_grid(my_id,n_mpi,npol,nrad,node_list,element_list,ifail,&
 bnd_node_list_out,bnd_element_list_out)
   use phys_module
   use mpi_mod
@@ -278,7 +280,7 @@ bnd_node_list_out,bnd_element_list_out)
   integer,intent(inout)                  :: ifail
   type(type_node_list), intent(inout)    :: node_list
   type(type_element_list), intent(inout) :: element_list
-  integer,intent(in)                     :: my_id,n_cpu
+  integer,intent(in)                     :: my_id,n_mpi
   integer, intent(in)                    :: npol,nrad !< Number of nodes (poloidal,radial)
   type(type_bnd_node_list),intent(out),optional    :: bnd_node_list_out
   type(type_bnd_element_list),intent(out),optional :: bnd_element_list_out
@@ -287,7 +289,7 @@ bnd_node_list_out,bnd_element_list_out)
   type(type_bnd_element_list)            :: bnd_elm_list
 
   !> initialisations 
-  call tr_meminit(my_id,n_cpu) !< initialise memory tracing
+  call tr_meminit(my_id,n_mpi) !< initialise memory tracing
   call clck_init(); call r3_info_init() !< initialise timing
   call det_modes() !< initialise mode and mode_type arrays
   call initialise_basis() !< initialise the basis functions
@@ -298,13 +300,13 @@ bnd_node_list_out,bnd_element_list_out)
   call broadcast_phys(my_id)
   !> compute th initial grid
   call tr_resetfile()
-  call initial_grid(node_list,element_list,bnd_node_list,bnd_elm_list,my_id,n_cpu)
+  call initial_grid(node_list,element_list,bnd_node_list,bnd_elm_list,my_id,n_mpi)
   call broadcast_boundary(my_id,bnd_elm_list,bnd_node_list)
   !> compute and update the plasma equilibrium
   call equilibrium(my_id,node_list,element_list,bnd_node_list,bnd_elm_list,xpoint,xcase,nice_q)
   if(my_id.eq.0) call update_equil_state(my_id,node_list,element_list,bnd_elm_list,xpoint,xcase) 
   !> compute the flux aligned grid and recompute the equilibrium
-  call flux_grid(node_list,element_list,bnd_node_list,bnd_elm_list,my_id,n_cpu)
+  call flux_grid(node_list,element_list,bnd_node_list,bnd_elm_list,my_id,n_mpi)
   call equilibrium(my_id,node_list,element_list,bnd_node_list,bnd_elm_list,xpoint,xcase,nice_q)
   if(my_id.eq.0) then 
     call update_equil_state(my_id,node_list,element_list,bnd_elm_list,xpoint,xcase)
@@ -325,6 +327,7 @@ end subroutine default_flux_grid
 !> Project a function onto the JOREK elements
 subroutine project_f(rank,master,node_list,element_list,f,ifail,filter,filter_hyper,integral,&
   apply_dirichlet_bnd_in)
+  use mod_uncoupled_projection, only: assemble_projection_matrix, assemble_projection_matrix_n0
   use mpi_mod
   type(type_node_list), intent(inout)    :: node_list
   type(type_element_list), intent(inout) :: element_list
@@ -336,6 +339,7 @@ subroutine project_f(rank,master,node_list,element_list,f,ifail,filter,filter_hy
   real*8, optional, intent(out)          :: integral !< The integral of the projected function, from the weights
   real*8, dimension(:), allocatable      :: this_integral_weights
   type(DMUMPS_STRUC)                     :: p
+  type(type_SP_MATRIX)                   :: a_mat
   integer :: i, k, index, i_tor_local, n_tor_local, mpi_comm_n, mpi_comm_master, ierr
   real*8  :: my_filter, my_filter_hyper, area, volume
   logical :: apply_dirichlet_bnd
@@ -356,15 +360,17 @@ subroutine project_f(rank,master,node_list,element_list,f,ifail,filter,filter_hy
   if (present(apply_dirichlet_bnd_in)) apply_dirichlet_bnd = apply_dirichlet_bnd_in
   
   if (i_tor_local .eq. 1) then  
-    call prepare_mumps_par_n0(node_list,element_list,n_tor_local,i_tor_local,mpi_comm_world,mpi_comm_n,&
-         mpi_comm_master,p,area,volume,filter=my_filter,filter_hyper=my_filter_hyper,&
+    call assemble_projection_matrix_n0(node_list,element_list,n_tor_local,i_tor_local,mpi_comm_world,mpi_comm_n,&
+         mpi_comm_master,a_mat,area,volume,filter=my_filter,filter_hyper=my_filter_hyper,&
          filter_parallel=0.d0,apply_dirichlet_condition_in=apply_dirichlet_bnd,&
          integral_weights=this_integral_weights)
   else
-    call prepare_mumps_par(node_list,element_list,n_tor_local,i_tor_local,mpi_comm_world,mpi_comm_n,&
-         mpi_comm_master,p,filter=my_filter,filter_hyper=my_filter_hyper,filter_parallel=0.d0,&
+    call assemble_projection_matrix(node_list,element_list,n_tor_local,i_tor_local,mpi_comm_world,mpi_comm_n,&
+         mpi_comm_master,a_mat,filter=my_filter,filter_hyper=my_filter_hyper,filter_parallel=0.d0,&
          apply_dirichlet_condition_in=apply_dirichlet_bnd)
   endif
+
+  call map_matrix_to_MUMPS_datastructure(a_mat, p)
 
   ! Project manually
   p%JOB = 3
@@ -535,8 +541,6 @@ end subroutine elements_mean_rms
 
 !> construct the projected matrix from mumps data
 subroutine construct_matrix_from_mumps(mumps_data,matrix)
-  use mod_project_particles, only: DMUMPS_STRUC
-  implicit none
   type(DMUMPS_STRUC),intent(inout)              :: mumps_data
   real*8,dimension(:,:),allocatable,intent(out) :: matrix
   integer :: ii
@@ -560,7 +564,6 @@ end subroutine construct_matrix_from_mumps
 !>   ifail:      (integer) MPI failure/error code
 subroutine broadcast_dmumps_struct_A_irn_jcn(rank,master,mumps_data,ifail)
  use mpi_mod
- use mod_project_particles, only: DMUMPS_STRUC
  implicit none
  type(DMUMPS_STRUC),intent(inout) :: mumps_data
  integer,intent(inout) :: ifail
@@ -590,8 +593,6 @@ end subroutine broadcast_dmumps_struct_A_irn_jcn
 !>   ifail:      (integer) MPI failure/error code
 subroutine broadcast_dmumps_project_struct(rank,master,mumps_data,ifail)
   use mpi_mod
-  use mod_project_particles, only: DMUMPS_STRUC
-  implicit none
   type(DMUMPS_STRUC),intent(inout) :: mumps_data
   integer,intent(inout) :: ifail
   integer,intent(in)    :: rank,master
@@ -617,6 +618,56 @@ subroutine broadcast_dmumps_project_struct(rank,master,mumps_data,ifail)
   call MPI_Bcast(mumps_data%A,struct_integers(11),MPI_REAL8,master,MPI_COMM_WORLD,ifail)
   call MPI_Bcast(mumps_data%rhs,struct_integers(12),MPI_REAL8,master,MPI_COMM_WORLD,ifail)
 end subroutine broadcast_dmumps_project_struct
+
+
+subroutine map_matrix_to_MUMPS_datastructure(a_mat, mumps_par)
+  use, intrinsic :: ieee_exceptions
+  implicit none
+  type (type_SP_MATRIX), intent(in)      :: a_mat       !< Projection matrix using our datastructures
+  type (DMUMPS_STRUC)  , intent(inout)   :: mumps_par   !< Object used by mumps for solving linear systems (the matrix wil be copied inside of this)
+  logical :: halt(size(IEEE_USUAL,1)), found_nan
+  integer :: my_id_n, ierr
+
+  ! initialise MUMPS
+  mumps_par%COMM = a_mat%comm
+  mumps_par%JOB  = -1
+  mumps_par%SYM  = 0
+  mumps_par%PAR  = 1
+
+  call MPI_COMM_RANK(mumps_par%COMM, my_id_n, ierr)
+
+  call DMUMPS(mumps_par)
+ 
+  if (my_id_n .eq. 0) then
+
+    ! allocate(mumps_par%irn(a_mat%nnz),mumps_par%jcn(a_mat%nnz),mumps_par%A(a_mat%nnz))
+
+    ! map already constructed matrix to mumps datastructure
+    mumps_par%irn => a_mat%irn
+    mumps_par%jcn => a_mat%jcn
+    mumps_par%A   => a_mat%val
+
+  endif
+
+  mumps_par%n   = a_mat%ng
+  mumps_par%nz  = a_mat%nnz
+
+  ! parameters for factorization
+  mumps_par%JOB       = 4
+  mumps_par%icntl(2)  = 6 ! print diagnostics, statistics and warnings to stderr
+  mumps_par%icntl(4)  = 1 ! print errors(1), debug(2), much(3)
+  mumps_par%icntl(5)  = 0 ! assembled form
+  mumps_par%icntl(18) = 0 ! centralized input matrix (i.e. only on cpu 0)
+  mumps_par%icntl(7)  = 7 ! compute symmetric permutation (PORD or SCOTCH autoselect)
+  mumps_par%icntl(8)  = 8 ! scaling
+  mumps_par%icntl(14) = 80 ! memory relaxation parameter  
+
+  call ieee_get_halting_mode(IEEE_USUAL, halt)
+  call ieee_set_halting_mode(IEEE_USUAL, [.false., .false., .false.])
+  call DMUMPS(mumps_par)
+  call ieee_set_halting_mode(IEEE_USUAL, halt)
+
+end subroutine map_matrix_to_MUMPS_datastructure
 
 !> close dmumps
 subroutine close_dmumps(mumps_data)

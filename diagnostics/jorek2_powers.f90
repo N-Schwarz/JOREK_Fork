@@ -21,6 +21,7 @@ use diffusivities, only: get_dperp, get_zkperp
 use mod_import_restart
 use equil_info, only : get_psi_n
 use mod_interp
+use constants, only: ATOMIC_MASS_UNIT
 
 implicit none
 
@@ -196,7 +197,11 @@ do m=1, n_plane
           psi_norm = get_psi_n(psi, Z)          
 
           D_prof  = get_dperp (psi_norm)
-          ZK_prof = get_zkperp(psi_norm)
+          if (use_zkperp_times_density) then
+            ZK_prof = get_zkperp(psi_norm) * max(rho,zkperp_density_floor)
+          else
+            ZK_prof = get_zkperp(psi_norm)
+          endif
 
           T00 = max(T,0.001)
           ZKpar_T = ZK_par * (abs(T00)/T_0)**2.5
@@ -337,7 +342,7 @@ enddo
 
 delta_angle = 2.d0 * PI / float(n_plane)
 
-rho_norm = central_density*1.d20 * central_mass * 1.67d-27
+rho_norm = central_density*1.d20 * central_mass * ATOMIC_MASS_UNIT
 t_norm   = sqrt(MU_zero*rho_norm)
 
 nTV_div_in   = nTV_div_in   * delta_angle / MU_zero / t_norm * 2.5

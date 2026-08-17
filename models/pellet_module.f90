@@ -3,7 +3,8 @@ module pellet_module
   use constants
   use data_structure
   use phys_module
-  
+  use mod_interp, only: interp, interp_PRZ
+
   
   real*8 :: total_pellet_particles    !< the (total) pellet particles added in this timestep
   real*8 :: total_plasma_particles    !< the total plasma density (before this timestep)
@@ -130,7 +131,6 @@ module pellet_module
     use data_structure
     use phys_module
     use mpi_mod
-    use mod_interp, only: interp
     !use mod_integrals3D
     
     implicit none
@@ -152,13 +152,13 @@ module pellet_module
           call Integrals_3D(my_id, node_list,element_list,density,density_in,density_out,pressure,pressure_in,pressure_out, &
                             kin_par_tot, kin_par_in, kin_par_out, mom_par_tot, mom_par_in, mom_par_out, varminout, varmaxout)
                                                           
-    V_normalisation = 1.d0 / sqrt(central_density * 1d20 * mass_proton * central_mass * MU_ZERO)
+    V_normalisation = 1.d0 / sqrt(central_density * 1d20 * ATOMIC_MASS_UNIT * central_mass * MU_ZERO)
     
     pellet_R = pellet_R + pellet_velocity_R * tstep / V_normalisation
     pellet_Z = pellet_Z + pellet_velocity_Z * tstep / V_normalisation
     
     
-    phys_ablation = total_pellet_particles * central_density / sqrt(central_density * 1d20 * mass_proton * central_mass * MU_ZERO)
+    phys_ablation = total_pellet_particles * central_density / sqrt(central_density * 1d20 * ATOMIC_MASS_UNIT * central_mass * MU_ZERO)
     
     total_pellet_particles = total_pellet_particles * central_density * tstep 
     total_plasma_particles = total_plasma_particles * central_density          ! undo normalisation
@@ -242,8 +242,8 @@ module pellet_module
     spi_Vel_R_tmp   = 0.
     spi_Vel_phi_tmp = 0.
 
-    V_normalisation = 1.d0 / sqrt(central_density * 1d20 * mass_proton * central_mass * MU_ZERO)
-    t_norm          = sqrt(MU_ZERO * central_mass * MASS_PROTON * central_density * 1.d20)
+    V_normalisation = 1.d0 / sqrt(central_density * 1d20 * ATOMIC_MASS_UNIT * central_mass * MU_ZERO)
+    t_norm          = sqrt(MU_ZERO * central_mass * ATOMIC_MASS_UNIT * central_density * 1.d20)
   
     loop_over_shards: do i=1, n_spi(i_inj)
 
@@ -305,15 +305,10 @@ module pellet_module
       end if
   
       if (my_id == 0.) then
-        if (index_now > 1) then
-          xtime_spi_ablation(i_p,index_now)    = xtime_spi_ablation(i_p,index_now-1) &
-                                               + t_norm * tstep * pellets(i_p)%spi_abl * pellets(i_p)%spi_species
-          xtime_spi_ablation_bg(i_p,index_now) = xtime_spi_ablation_bg(i_p,index_now-1) &
-                                               + t_norm * tstep * pellets(i_p)%spi_abl * (1. - pellets(i_p)%spi_species)
-        else
-          xtime_spi_ablation(i_p,index_now)    = t_norm * tstep * pellets(i_p)%spi_abl * pellets(i_p)%spi_species
-          xtime_spi_ablation_bg(i_p,index_now) = t_norm * tstep * pellets(i_p)%spi_abl * (1. - pellets(i_p)%spi_species) 
-        end if
+        xtime_spi_ablation(i_inj,index_now)    = xtime_spi_ablation(i_inj,index_now) &
+                                                 + t_norm * tstep * pellets(i_p)%spi_abl * pellets(i_p)%spi_species
+        xtime_spi_ablation_bg(i_inj,index_now) = xtime_spi_ablation_bg(i_inj,index_now) &
+                                                 + t_norm * tstep * pellets(i_p)%spi_abl * (1. - pellets(i_p)%spi_species)
       end if
   
       if (spi_abl_model(i_inj) == 0) then
@@ -353,7 +348,7 @@ module pellet_module
 #ifdef WITH_TiTe
           call interp_PRZ(node_list,element_list,i_elm,[var_rho,var_Te,var_psi,var_rhoimp],4,s_out,t_out,pellets(i_p)%spi_phi,&
                           P,P_s,P_t,P_phi,R,R_s,R_t,Z,Z_s,Z_t)        
-          if (drift_distance(i_inj) /= 0) then
+          if (drift_distance(i_inj) /= 0 .and. ifail_drift == 0) then
             call interp_PRZ(node_list,element_list,i_elm_drift,[var_rho,var_Te,var_psi,var_rhoimp],4,s_out_drift,t_out_drift,pellets(i_p)%spi_phi,&
                                    P_drift,P_s_drift,P_t_drift,P_phi_drift,R_drift,R_s_drift,R_t_drift,Z_drift,Z_s_drift,Z_t_drift)
           end if
@@ -361,7 +356,7 @@ module pellet_module
 #else /* WITH_TiTe */
           call interp_PRZ(node_list,element_list,i_elm,[var_rho,var_T,var_psi,var_rhoimp],4,s_out,t_out,pellets(i_p)%spi_phi,&
                           P,P_s,P_t,P_phi,R,R_s,R_t,Z,Z_s,Z_t)
-          if (drift_distance(i_inj) /= 0) then
+          if (drift_distance(i_inj) /= 0 .and. ifail_drift == 0) then
             call interp_PRZ(node_list,element_list,i_elm_drift,[var_rho,var_T,var_psi,var_rhoimp],4,s_out_drift,t_out_drift,pellets(i_p)%spi_phi,&
                                    P_drift,P_s_drift,P_t_drift,P_phi_drift,R_drift,R_s_drift,R_t_drift,Z_drift,Z_s_drift,Z_t_drift)
           end if
@@ -370,7 +365,7 @@ module pellet_module
 #ifdef WITH_TiTe
           call interp_PRZ(node_list,element_list,i_elm,[var_rho,var_Te,var_psi],3,s_out,t_out,pellets(i_p)%spi_phi,&
                           P,P_s,P_t,P_phi,R,R_s,R_t,Z,Z_s,Z_t)        
-          if (drift_distance(i_inj) /= 0) then
+          if (drift_distance(i_inj) /= 0 .and. ifail_drift == 0) then
             call interp_PRZ(node_list,element_list,i_elm_drift,[var_rho,var_Te,var_psi],3,s_out_drift,t_out_drift,pellets(i_p)%spi_phi,&
                                    P_drift,P_s_drift,P_t_drift,P_phi_drift,R_drift,R_s_drift,R_t_drift,Z_drift,Z_s_drift,Z_t_drift)
           end if
@@ -378,7 +373,7 @@ module pellet_module
 #else /* WITH_TiTe */
           call interp_PRZ(node_list,element_list,i_elm,[var_rho,var_T,var_psi],3,s_out,t_out,pellets(i_p)%spi_phi,&
                           P,P_s,P_t,P_phi,R,R_s,R_t,Z,Z_s,Z_t)
-          if (drift_distance(i_inj) /= 0) then
+          if (drift_distance(i_inj) /= 0 .and. ifail_drift == 0) then
             call interp_PRZ(node_list,element_list,i_elm_drift,[var_rho,var_T,var_psi],3,s_out_drift,t_out_drift,pellets(i_p)%spi_phi,&
                                    P_drift,P_s_drift,P_t_drift,P_phi_drift,R_drift,R_s_drift,R_t_drift,Z_drift,Z_s_drift,Z_t_drift)
           end if
@@ -559,14 +554,14 @@ module pellet_module
   
           B0 = abs(F0 / R_geo)
           nu = 0.843
-          if (B0 > 2.) pellets(i_p)%spi_abl = pellets(i_p)%spi_abl * (2./B0)**nu
+          if (B0 > 2. .and. spi_abl_mag_reduction) pellets(i_p)%spi_abl = pellets(i_p)%spi_abl * (2./B0)**nu
   
         else if (spi_abl_model(i_inj) == 3) then ! .not. with_impurities
           pellets(i_p)%spi_abl = 39.0023 * 2. * MOLE_NUMBER * ((pellets(i_p)%spi_radius*1.d2 / 0.2)**(4./3.)) &
                                  * ((n_SI*1.d-20)**(1./3.)) * ((T_eV/2.d3)**(5./3.)) / 4.0282
           B0 = abs(F0 / R_geo)
           nu = 0.843
-          if (B0 > 2.) pellets(i_p)%spi_abl = pellets(i_p)%spi_abl * (2./B0)**nu
+          if (B0 > 2. .and. spi_abl_mag_reduction) pellets(i_p)%spi_abl = pellets(i_p)%spi_abl * (2./B0)**nu
         else 
           write(*,*) "Unknown ablation model, terminating now!"
           stop
@@ -579,12 +574,15 @@ module pellet_module
       end if
      
       if (my_id == 0) then
-        xtime_spi_ablation_rate(i_p,index_now) = pellets(i_p)%spi_abl * pellets(i_p)%spi_species
-        xtime_spi_ablation_bg_rate(i_p,index_now) = pellets(i_p)%spi_abl * (1. - pellets(i_p)%spi_species)
+        xtime_spi_ablation_rate(i_inj,index_now) = xtime_spi_ablation_rate(i_inj,index_now) + pellets(i_p)%spi_abl * pellets(i_p)%spi_species
+        xtime_spi_ablation_bg_rate(i_inj,index_now) = xtime_spi_ablation_bg_rate(i_inj,index_now) + pellets(i_p)%spi_abl * (1. - pellets(i_p)%spi_species)
       end if
   
     end do loop_over_shards
   
+    if (index_now < SIZE(xtime_spi_ablation, dim=2))    xtime_spi_ablation(i_inj,index_now+1)    = xtime_spi_ablation(i_inj,index_now) 
+    if (index_now < SIZE(xtime_spi_ablation_bg, dim=2)) xtime_spi_ablation_bg(i_inj,index_now+1) = xtime_spi_ablation_bg(i_inj,index_now) 
+
     if (spi_tor_rot) then
       ns_phi_rotate  = ns_phi_rotate + tor_frequency * 2. * PI * tstep / V_normalisation
     end if
@@ -923,19 +921,19 @@ module pellet_module
       deallocate(rnd)
 
       if (allocated(xtime_spi_ablation)) call tr_deallocate(xtime_spi_ablation,"xtime_spi_ablation",CAT_UNKNOWN)
-      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation,1,n_spi_tot,1,nstep,"xtime_spi_ablation")
+      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation,1,n_inj,1,nstep,"xtime_spi_ablation")
 
       if (allocated(xtime_spi_ablation_rate)) &
       call tr_deallocate(xtime_spi_ablation_rate,"xtime_spi_ablation_rate",CAT_UNKNOWN)
-      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_rate,1,n_spi_tot,1,nstep,"xtime_spi_ablation_rate")
+      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_rate,1,n_inj,1,nstep,"xtime_spi_ablation_rate")
 
       if (allocated(xtime_spi_ablation_bg)) &
       call tr_deallocate(xtime_spi_ablation_bg,"xtime_spi_ablation_bg",CAT_UNKNOWN)
-      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_bg,1,n_spi_tot,1,nstep,"xtime_spi_ablation_bg")
+      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_bg,1,n_inj,1,nstep,"xtime_spi_ablation_bg")
 
       if (allocated(xtime_spi_ablation_bg_rate)) &
       call tr_deallocate(xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
-      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_bg_rate,1,n_spi_tot,1,nstep,"xtime_spi_ablation_bg_rate")
+      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_bg_rate,1,n_inj,1,nstep,"xtime_spi_ablation_bg_rate")
 
     else
       write(*,*) "ERROR in pellet_module: n_spi<1"
@@ -1262,19 +1260,19 @@ module pellet_module
       end do
 
       if (allocated(xtime_spi_ablation)) call tr_deallocate(xtime_spi_ablation,"xtime_spi_ablation",CAT_UNKNOWN)
-      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation,1,n_spi_tot,1,nstep,"xtime_spi_ablation")
+      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation,1,n_inj,1,nstep,"xtime_spi_ablation")
 
       if (allocated(xtime_spi_ablation_rate)) &
       call tr_deallocate(xtime_spi_ablation_rate,"xtime_spi_ablation_rate",CAT_UNKNOWN)
-      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_rate,1,n_spi_tot,1,nstep,"xtime_spi_ablation_rate")
+      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_rate,1,n_inj,1,nstep,"xtime_spi_ablation_rate")
 
       if (allocated(xtime_spi_ablation_bg)) &
       call tr_deallocate(xtime_spi_ablation_bg,"xtime_spi_ablation_bg",CAT_UNKNOWN)
-      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_bg,1,n_spi_tot,1,nstep,"xtime_spi_ablation_bg")
+      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_bg,1,n_inj,1,nstep,"xtime_spi_ablation_bg")
 
       if (allocated(xtime_spi_ablation_bg_rate)) &
       call tr_deallocate(xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
-      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_bg_rate,1,n_spi_tot,1,nstep,"xtime_spi_ablation_bg_rate")
+      if (nstep .gt. 0) call tr_allocate(xtime_spi_ablation_bg_rate,1,n_inj,1,nstep,"xtime_spi_ablation_bg_rate")
 
     else
       write(*,*) "ERROR in pellet_module: n_spi<1"

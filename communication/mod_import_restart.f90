@@ -1,10 +1,13 @@
 !> Routines to import a restart file written out by a routine in [[export_restart]].
 module mod_import_restart
 implicit none
+
+character(len=20), parameter :: rst_file_ind_fmt(2) = (/'(a,i6.6)', '(a,i5.5)'/)
+
 contains
 !> Imports a restart file written out by the routine export_restart.
 
-subroutine import_restart(node_list, element_list, filename, format_rst, ierr, no_perturbations, aux_node_list)
+subroutine import_restart(node_list, element_list, filename, format_rst, ierr, no_perturbations, aux_node_list, use_3D_rtree)
 
   use tr_module
   use data_structure
@@ -24,6 +27,7 @@ subroutine import_restart(node_list, element_list, filename, format_rst, ierr, n
   integer,                      intent(out)             :: ierr
   integer,                      intent(in)              :: format_rst  ! format of restart file 
   logical, optional,            intent(in)              :: no_perturbations ! don't initialize new harmonics
+  logical, optional,            intent(in)              :: use_3D_rtree ! use 3D rtree for stellarator model
  
   ! --- Local parameters
   type (type_bnd_element_list)           :: bnd_elm_list    
@@ -35,21 +39,25 @@ subroutine import_restart(node_list, element_list, filename, format_rst, ierr, n
   if ( rst_hdf5 == 0 ) then
     write(*,*) " Restart from BINARY file " // trim(filename) // '.rst'
     if(present(aux_node_list)) then 
-      call import_binary_restart(node_list, element_list, trim(filename)//'.rst', &
-           format_rst, ierr, no_perturbations, aux_node_list)
+      call import_binary_restart(node_list=node_list, element_list=element_list, &
+           filename=trim(filename)//'.rst', format_rst=format_rst, error=ierr, &
+           no_perturbations=no_perturbations, aux_node_list=aux_node_list, use_3D_rtree=use_3D_rtree)
    else
-      call import_binary_restart(node_list, element_list, trim(filename)//'.rst', &
-           format_rst, ierr, no_perturbations)
+      call import_binary_restart(node_list=node_list, element_list=element_list, &
+           filename=trim(filename)//'.rst', format_rst=format_rst, error=ierr, &
+           no_perturbations=no_perturbations, use_3D_rtree=use_3D_rtree)
    endif
 
   else if ( rst_hdf5 == 1 ) then
     write(*,*) " Restart from HDF5 file " // trim(filename) // '.h5'
     if(present(aux_node_list)) then 
-      call import_hdf5_restart(node_list, element_list, trim(filename)//'.h5', &
-           format_rst,ierr, no_perturbations, aux_node_list)
+      call import_hdf5_restart(node_list=node_list, element_list=element_list, &
+           filename=trim(filename)//'.h5', format_rst=format_rst, error=ierr, &
+           no_perturbations=no_perturbations, aux_node_list=aux_node_list, use_3D_rtree=use_3D_rtree)
    else
-      call import_hdf5_restart(node_list, element_list, trim(filename)//'.h5', &
-           format_rst,ierr, no_perturbations)
+      call import_hdf5_restart(node_list=node_list, element_list=element_list, &
+           filename=trim(filename)//'.h5', format_rst=format_rst, error=ierr, &
+           no_perturbations=no_perturbations, use_3D_rtree=use_3D_rtree)
    endif
  
   end if
@@ -66,7 +74,7 @@ end subroutine import_restart
 
 !
 ! Import a binary restart file
-subroutine import_binary_restart(node_list, element_list, filename, format_rst, error, no_perturbations, aux_node_list)
+subroutine import_binary_restart(node_list, element_list, filename, format_rst, error, no_perturbations, aux_node_list, use_3D_rtree)
 
   use tr_module 
   use data_structure
@@ -85,9 +93,9 @@ subroutine import_binary_restart(node_list, element_list, filename, format_rst, 
   integer,                       intent(out)             :: error
   integer,                       intent(in)              :: format_rst  ! format of restart file
   logical, optional,             intent(in)              :: no_perturbations ! don't initialize new harmonics
-  
+  logical, optional,             intent(in)              :: use_3D_rtree ! use 3D rtree for stellarator model
   ! --- Local variables
-  integer              :: i, j, m, k, n_tor_tmp
+  integer              :: i, j, m, k, n_tor_tmp, i_p, i_inj, p_begin
   real*8               :: growth_mag, growth_kin, amplitude
   integer, allocatable :: mode_tmp(:)
   real*8,  allocatable :: values_tmp(:,:,:), deltas_tmp(:,:,:), aux_values_tmp(:,:,:)
@@ -108,6 +116,11 @@ subroutine import_binary_restart(node_list, element_list, filename, format_rst, 
   real*8,  allocatable :: spi_psi_arr_drift (:)
   real*8,  allocatable :: spi_grad_psi_arr_drift (:)
   integer, allocatable :: plasmoid_in_domain_arr (:)
+
+  real*8, allocatable  :: xtime_spi_ablation_tmp(:,:)         !< The time history of SPI ablation
+  real*8, allocatable  :: xtime_spi_ablation_rate_tmp(:,:)    !< The time history of SPI ablation rate
+  real*8, allocatable  :: xtime_spi_ablation_bg_tmp(:,:)      !< The time history of SPI ablation for background species
+  real*8, allocatable  :: xtime_spi_ablation_bg_rate_tmp(:,:) ! <The time history of SPI ablation rate for bg species
 
   integer              :: n_spi_check, n_inj_check
   logical              :: modes_changed
@@ -237,7 +250,7 @@ subroutine import_binary_restart(node_list, element_list, filename, format_rst, 
 #else
   read(21) element_list%element(1:element_list%n_elements)
 #endif
-  read(21) tstep,eta_rst,visco_rst,visco_par_rst
+  read(21) tstep_rst,eta_rst,visco_rst,visco_par_rst
   read(21) index_start
   read(21) t_start
   
@@ -579,6 +592,10 @@ endif
       call tr_deallocate(xtime_rad_power,"xtime_rad_power",CAT_UNKNOWN)
     call tr_allocate(xtime_rad_power,1,index_start+nstep,"xtime_rad_power",CAT_UNKNOWN)
     read(21)  xtime_rad_power(1:index_start)
+    if (allocated(xtime_rad_cooling_power)) &
+      call tr_deallocate(xtime_rad_cooling_power,"xtime_rad_cooling_power",CAT_UNKNOWN)
+    call tr_allocate(xtime_rad_cooling_power,1,index_start+nstep,"xtime_rad_cooling_power",CAT_UNKNOWN)
+    read(21)  xtime_rad_cooling_power(1:index_start)
     if (allocated(xtime_E_ion)) &
       call tr_deallocate(xtime_E_ion,"xtime_E_ion",CAT_UNKNOWN)
     call tr_allocate(xtime_E_ion,1,index_start+nstep,"xtime_E_ion",CAT_UNKNOWN)
@@ -598,24 +615,78 @@ endif
     if (n_spi_tot >= 1) then
 
       if (index_start >= 1) then
+        if (spi_abl_history_old) then
+          if (allocated(xtime_spi_ablation_tmp)) &
+            call tr_deallocate(xtime_spi_ablation_tmp,"xtime_spi_ablation",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_tmp,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_rate_tmp)) &
+            call tr_deallocate(xtime_spi_ablation_rate_tmp,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_rate_tmp,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg_tmp)) &
+            call tr_deallocate(xtime_spi_ablation_bg_tmp,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg_tmp,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg_rate_tmp)) &
+            call tr_deallocate(xtime_spi_ablation_bg_rate_tmp,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg_rate_tmp,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
 
-        if (allocated(xtime_spi_ablation)) &
-          call tr_deallocate(xtime_spi_ablation,"xtime_spi_ablation",CAT_UNKNOWN)
-        call tr_allocate(xtime_spi_ablation,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation",CAT_UNKNOWN)
-        if (allocated(xtime_spi_ablation_rate)) &
-          call tr_deallocate(xtime_spi_ablation_rate,"xtime_spi_ablation_rate",CAT_UNKNOWN)
-        call tr_allocate(xtime_spi_ablation_rate,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_rate",CAT_UNKNOWN)
-        if (allocated(xtime_spi_ablation_bg)) &
-          call tr_deallocate(xtime_spi_ablation_bg,"xtime_spi_ablation_bg",CAT_UNKNOWN)
-        call tr_allocate(xtime_spi_ablation_bg,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_bg",CAT_UNKNOWN)
-        if (allocated(xtime_spi_ablation_bg_rate)) &
-          call tr_deallocate(xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
-        call tr_allocate(xtime_spi_ablation_bg_rate,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+          read(21)  xtime_spi_ablation_tmp(1:n_spi_tot,1:index_start)
+          read(21)  xtime_spi_ablation_rate_tmp(1:n_spi_tot,1:index_start)
+          read(21)  xtime_spi_ablation_bg_tmp(1:n_spi_tot,1:index_start)
+          read(21)  xtime_spi_ablation_bg_rate_tmp(1:n_spi_tot,1:index_start)
 
-        read(21)  xtime_spi_ablation(1:n_spi_tot,1:index_start)
-        read(21)  xtime_spi_ablation_rate(1:n_spi_tot,1:index_start)
-        read(21)  xtime_spi_ablation_bg(1:n_spi_tot,1:index_start)
-        read(21)  xtime_spi_ablation_bg_rate(1:n_spi_tot,1:index_start)
+          if (allocated(xtime_spi_ablation)) &
+            call tr_deallocate(xtime_spi_ablation,"xtime_spi_ablation",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation,1,n_inj,1,index_start+nstep,"xtime_spi_ablation",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_rate)) &
+            call tr_deallocate(xtime_spi_ablation_rate,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_rate,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg)) &
+            call tr_deallocate(xtime_spi_ablation_bg,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg_rate)) &
+            call tr_deallocate(xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg_rate,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+
+          p_begin = 0
+          xtime_spi_ablation = 0.0
+          xtime_spi_ablation_rate = 0.0
+          xtime_spi_ablation_bg = 0.0
+          xtime_spi_ablation_bg_rate = 0.0
+          do i_inj = 1, n_inj
+            do i_p = 1, n_spi(i_inj)
+              xtime_spi_ablation(i_inj,:) = xtime_spi_ablation(i_inj,:) + xtime_spi_ablation_tmp(i_p+p_begin,:)
+              xtime_spi_ablation_rate(i_inj,:) = xtime_spi_ablation_rate(i_inj,:) + xtime_spi_ablation_rate_tmp(i_p+p_begin,:)
+              xtime_spi_ablation_bg(i_inj,:) = xtime_spi_ablation_bg(i_inj,:) + xtime_spi_ablation_bg_tmp(i_p+p_begin,:)
+              xtime_spi_ablation_bg_rate(i_inj,:) = xtime_spi_ablation_bg_rate(i_inj,:) + xtime_spi_ablation_bg_rate_tmp(i_p+p_begin,:)
+            end do  
+            p_begin = p_begin + n_spi(i_inj)
+          end do
+
+          call tr_deallocate(xtime_spi_ablation_tmp,"xtime_spi_ablation",CAT_UNKNOWN)
+          call tr_deallocate(xtime_spi_ablation_rate_tmp,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          call tr_deallocate(xtime_spi_ablation_bg_tmp,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          call tr_deallocate(xtime_spi_ablation_bg_rate_tmp,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+        else
+          ! For the binary file, simply output the warning so that the users are aware.
+          write(*,*) "WARNING! The dimension of the SPI ablation history is changed. Make sure to set spi_abl_history_old = .t. if you are restarting from an old restart file or the first time!"
+          if (allocated(xtime_spi_ablation)) &
+            call tr_deallocate(xtime_spi_ablation,"xtime_spi_ablation",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation,1,n_inj,1,index_start+nstep,"xtime_spi_ablation",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_rate)) &
+            call tr_deallocate(xtime_spi_ablation_rate,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_rate,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg)) &
+            call tr_deallocate(xtime_spi_ablation_bg,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg_rate)) &
+            call tr_deallocate(xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg_rate,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+
+          read(21)  xtime_spi_ablation(1:n_inj,1:index_start)
+          read(21)  xtime_spi_ablation_rate(1:n_inj,1:index_start)
+          read(21)  xtime_spi_ablation_bg(1:n_inj,1:index_start)
+          read(21)  xtime_spi_ablation_bg_rate(1:n_inj,1:index_start)
+        endif
       end if
 
       read(21,err=999, end=999) n_spi_check
@@ -862,7 +933,9 @@ endif
       do i=1,node_list%n_nodes
         node_list%node(i)%values(n_tor_tmp+1:n_tor,:,:)= 0.d0
         do j=n_tor_tmp+1, n_tor
-          node_list%node(i)%values(j,:,var_rho)= amplitude * node_list%node(i)%values(1,:,var_rho)
+          if (with_rho) then
+            node_list%node(i)%values(j,:,var_rho)= amplitude * node_list%node(i)%values(1,:,var_rho)
+          endif
 #ifdef WITH_TiTe
           node_list%node(i)%values(j,:,var_Ti)= amplitude * node_list%node(i)%values(1,:,var_Ti)
           node_list%node(i)%values(j,:,var_Te)= amplitude * node_list%node(i)%values(1,:,var_Te)
@@ -889,7 +962,7 @@ endif
   if (allocated(values_tmp))     call tr_deallocate(values_tmp,"values_tmp",CAT_UNKNOWN)
   if (allocated(deltas_tmp))     call tr_deallocate(deltas_tmp,"deltas_tmp",CAT_UNKNOWN)
 
-  call populate_element_rtree(node_list, element_list)
+  call populate_element_rtree(node_list, element_list, use_3D_rtree)
   
   equil_initialized = .true.
 
@@ -899,7 +972,7 @@ end subroutine import_binary_restart
 
 !
 ! Import an HDF5 restart file
-subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, error, no_perturbations, aux_node_list)
+subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, error, no_perturbations, aux_node_list, use_3D_rtree)
 
 #include "version.h"
 
@@ -925,6 +998,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   integer,                      intent(in)              :: format_rst  ! format of restart file
   integer,                      intent(out)             :: error
   logical, optional,            intent(in)              :: no_perturbations ! don't initialize new harmonics
+  logical, optional,            intent(in)              :: use_3D_rtree ! whether to use 3D rtree for element search (if false, use 2D rtree)
   
   ! --- Perturbation-Import variables
   type (type_node_list)   , pointer	:: node_list_perturbation
@@ -935,7 +1009,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   logical, parameter   			:: import_perturbation = .false.
 
   ! --- Local variables
-  integer              :: i, j, m, k, n_tor_tmp, n_coord_tor_tmp, jorek_model_tmp, n_var_tmp, n_order_tmp, n_period_tmp, rst_hdf5_version_tmp
+  integer              :: i, j, m, k, n_tor_tmp, n_coord_tor_tmp, jorek_model_tmp, n_var_tmp, n_order_tmp, n_period_tmp, rst_hdf5_version_tmp, i_p, p_begin
   integer              :: n_plane_tmp, n_vertex_max_tmp, n_nodes_max_tmp, n_elements_max_tmp,n_boundary_max_tmp, n_nodes_tmp, n_dof_tmp
   integer              :: n_pieces_max_tmp, n_degrees_tmp, nref_max_tmp, n_ref_list_tmp, n_new_modes
   real*8               :: growth_mag, growth_kin, amplitude
@@ -948,19 +1022,24 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   integer(HID_T)     :: file_id, datatype, dataset
   integer            :: ind, n_spi_check, n_inj_check
   character          :: t_current_prof_initialized
+  integer            :: var_rank       !< Rank of an array in the restart file
+  integer(HSIZE_T),dimension(:),allocatable :: var_dims       !< Dimension of an array in the restart file
   
   real(RKIND), allocatable :: t_x(:,:,:,:)
   real(RKIND), allocatable :: t_values(:,:,:,:)
   real(RKIND), allocatable :: t_deltas(:,:,:,:)
   real(RKIND), allocatable :: t_aux_values(:,:,:,:)
 
+  ! Stellarator node members
   real(RKIND), allocatable :: t_pressure(:,:)
   real(RKIND), allocatable :: t_r_tor_eq(:,:)
   real(RKIND), allocatable :: t_j_field(:,:,:,:)
   real(RKIND), allocatable :: t_b_field(:,:,:,:)
+  real(RKIND), allocatable :: t_b_vac_field(:,:,:,:)
   real(RKIND), allocatable :: t_chi_correction(:,:,:)
   real(RKIND), allocatable :: t_j_source(:,:,:)
 
+  ! Full MHD node members
   real(RKIND), allocatable :: t_psi_eq(:,:)
   real(RKIND), allocatable :: t_Fprof_eq(:,:)
 
@@ -984,8 +1063,12 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   integer,     allocatable :: t_contain_node(:,:)
   integer,     allocatable :: t_nref(:)
 
-! local variables
+  ! stellarator fixed temperature parameters
+  real*8                   :: T_0_hdf5, Ti_0_hdf5, Te_0_hdf5
+  real*8                   :: F_0
+  integer                  :: n_flux_hdf5, n_tht_hdf5
 
+  ! local variables
   real*8, allocatable :: spi_R_arr (:)
   real*8, allocatable :: spi_Z_arr (:)
   real*8, allocatable :: spi_phi_arr (:)
@@ -1005,6 +1088,11 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   real*8, allocatable :: spi_grad_psi_arr_drift (:)
   integer,allocatable :: plasmoid_in_domain_arr (:)
 
+  real*8, allocatable  :: xtime_spi_ablation_tmp(:,:)         !< The time history of SPI ablation
+  real*8, allocatable  :: xtime_spi_ablation_rate_tmp(:,:)    !< The time history of SPI ablation rate
+  real*8, allocatable  :: xtime_spi_ablation_bg_tmp(:,:)      !< The time history of SPI ablation for background species
+  real*8, allocatable  :: xtime_spi_ablation_bg_rate_tmp(:,:) ! <The time history of SPI ablation rate for bg species
+
   integer :: err_exists, dterr, n_spi_begin, i_inj
   logical :: flag_exists, type_match, aux_values_read
 
@@ -1014,6 +1102,8 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   real*8, allocatable :: t_energies4(:,:,:)  !< Magnetic and kinetic mode energies at previous timesteps.
   logical                               :: no_pert
   
+  logical, parameter  :: use_defensive_checks = .true.
+
   no_pert = .false.
   if ( present(no_perturbations) ) no_pert = no_perturbations
 
@@ -1051,6 +1141,8 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
 
   call HDF5_integer_reading(file_id,jorek_model_tmp,"jorek_model")
   call HDF5_integer_reading(file_id,n_var_tmp,"n_var")
+  if (n_aux_var == 0) call HDF5_integer_reading(file_id,n_aux_var,"n_aux_var") ! for diagnostic purposes
+  
   import_3xx_4xx = .false.
   if ( (jorek_model >= 400) .and. (jorek_model <= 499) .and. (jorek_model_tmp >= 300) .and. (jorek_model_tmp <= 399) ) then
     import_3xx_4xx = .true. ! Import a JOREK model 3XX restart file into a 4XX binary
@@ -1138,12 +1230,16 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
 
   aux_values_read = .false.
   if(present(aux_node_list)) then
+
+    ! --- initialising aux_node_list
+    call init_node_list(aux_node_list, n_nodes_tmp, n_dof_tmp, n_aux_var)
+
+    ! --- checking if aux_values are saved
     call h5lexists_f(file_id,'aux_values',flag_exists,err_exists)
     if(flag_exists .and. err_exists == 0) then
       aux_values_read = .true.
-      call init_node_list(aux_node_list, n_nodes_tmp, n_dof_tmp, n_aux_var)
-
     endif
+
   endif
 
   ! -> Allocate temporary arrays 
@@ -1151,7 +1247,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   call tr_allocate(t_values,1,node_list%n_nodes,1,      n_tor_tmp,1,n_degrees_tmp,1,n_var_tmp, "node_list%values",CAT_UNKNOWN)
   call tr_allocate(t_deltas,1,node_list%n_nodes,1,      n_tor_tmp,1,n_degrees_tmp,1,n_var_tmp, "node_list%deltas",CAT_UNKNOWN)
   if(aux_values_read) then
-    call tr_allocate(t_aux_values,1,aux_node_list%n_nodes,1,n_tor_tmp,1,n_degrees_tmp,1,n_var_tmp, "aux_node_list%values",CAT_UNKNOWN)
+    call tr_allocate(t_aux_values,1,aux_node_list%n_nodes,1,n_tor_tmp,1,n_degrees_tmp,1,n_aux_var, "aux_node_list%values",CAT_UNKNOWN)
   endif
    
 #if STELLARATOR_MODEL
@@ -1159,6 +1255,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   call tr_allocate(t_pressure,1,node_list%n_nodes,1,n_degrees_tmp,                              "node_list%pressure",CAT_UNKNOWN)
   call tr_allocate(t_j_field,1,node_list%n_nodes,1,n_coord_tor_tmp,1,n_degrees_tmp,1,n_dim+1,  "node_list%j_field",CAT_UNKNOWN)
   call tr_allocate(t_b_field,1,node_list%n_nodes,1,n_coord_tor_tmp,1,n_degrees_tmp,1,n_dim+1,    "node_list%b_field",     CAT_UNKNOWN)
+  call tr_allocate(t_b_vac_field,1,node_list%n_nodes,1,n_coord_tor_tmp,1,n_degrees_tmp,1,n_dim+1,"node_list%b_vac_field",     CAT_UNKNOWN)
   call tr_allocate(t_chi_correction,1,node_list%n_nodes,1,     n_coord_tor_tmp,1,n_degrees_tmp,            "node_list%chi_correction",CAT_UNKNOWN)
   call tr_allocate(t_j_source,1,node_list%n_nodes,1,     n_tor_tmp,1,n_degrees_tmp,            "node_list%j_source",CAT_UNKNOWN)
 #endif 
@@ -1205,6 +1302,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   if(aux_values_read) then
      call HDF5_array4D_reading(file_id,t_aux_values,   'aux_values')
   endif
+
 #if STELLARATOR_MODEL
   call HDF5_array2D_reading(file_id,t_r_tor_eq, 'r_tor_eq')
 #if JOREK_MODEL == 180
@@ -1212,11 +1310,53 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   call HDF5_array4D_reading(file_id,t_j_field,  'j_field')
   call HDF5_array4D_reading(file_id,t_b_field,   'b_field')
 #endif
+
+#ifdef WITH_TiTe
+  call HDF5_real_reading(file_id,Ti_0_hdf5,'Ti_0')
+  call HDF5_real_reading(file_id,Te_0_hdf5,'Te_0')
+  if (use_defensive_checks) then
+    if ((abs(Ti_0_hdf5 - Ti_0) .gt. 1.d-16) .or. (abs(Te_0_hdf5 - Te_0) .gt. 1.d-16)) then
+      write(*,*) "Error: Value of Ti_0 or Te_0 in restart file and namelist are inconsistent: ", Ti_0_hdf5, Ti_0, Te_0_hdf5, Te_0
+      stop
+    endif
+  else
+    Ti_0 = Ti_0_hdf5; Te_0 = Te_0_hdf5
+  endif
+#else
+  call HDF5_real_reading(file_id,T_0_hdf5,'T_0')
+  if (use_defensive_checks) then
+    if (abs(T_0_hdf5 - T_0) .gt. 1.d-16) then
+      write(*,*) "Error: Value of T_0 in restart file and namelist are inconsistent: ", T_0_hdf5, T_0
+      stop
+    endif
+  else
+    T_0 = T_0_hdf5
+  endif
+#endif
+  
+  call HDF5_real_reading(file_id,F_0,'F0')
+  if (abs(F_0 - F0) .gt. 1.d-16) then
+    write(*,*) "Error: F0 in restart file and namelist are inconsistent: ", F_0, F0
+    stop
+  endif
+
+  call HDF5_integer_reading(file_id,n_flux_hdf5,'n_flux')
+  call HDF5_integer_reading(file_id,n_tht_hdf5,'n_tht')
+  if ((n_tht_hdf5 .ne. n_tht) .or. (n_flux_hdf5 .ne. n_flux)) then
+    write(*, *) "Error: Number of radial and poloidal in restart file and namelist are inconsistent: ", n_flux_hdf5, n_flux, n_tht_hdf5, n_tht
+    stop
+  endif
+
 #ifndef USE_DOMM
+#ifdef USE_EXT_FIELD
+  call HDF5_array4D_reading(file_id,t_b_vac_field,   'b_vac_field')
+#else
   call HDF5_array3D_reading(file_id,t_chi_correction, 'chi_correction')
 #endif
-  call HDF5_array3D_reading(file_id,t_j_source, 'j_source')
 #endif
+
+  call HDF5_array3D_reading(file_id,t_j_source, 'j_source')
+#endif /* STELLARATOR_MODEL */
 
 #ifdef fullmhd
   call HDF5_array2D_reading(file_id,t_psi_eq,   'psi_eq')
@@ -1290,10 +1430,10 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
         do j=1,n_degrees_tmp 
           if (mode_tmp(m) .eq. mode(k)) then
             if ((m .eq. 1) .and. (k.eq.1)) then
-              aux_node_list%node(i)%values(k,j,1:n_var_tmp)   = t_aux_values(i,m,j,1:n_var_tmp)
+              aux_node_list%node(i)%values(k,j,1:n_aux_var)   = t_aux_values(i,m,j,1:n_aux_var)
             else
-              aux_node_list%node(i)%values(k-1,j,1:n_var_tmp) = t_aux_values(i,m-1,j,1:n_var_tmp)
-              aux_node_list%node(i)%values(k,j,1:n_var_tmp)   = t_aux_values(i,m,j,1:n_var_tmp) 
+              aux_node_list%node(i)%values(k-1,j,1:n_aux_var) = t_aux_values(i,m-1,j,1:n_aux_var)
+              aux_node_list%node(i)%values(k,j,1:n_aux_var)   = t_aux_values(i,m,j,1:n_aux_var) 
             end if
           end if
         enddo
@@ -1309,7 +1449,11 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
     node_list%node(i)%j_field  = t_j_field(i,:,:,:)
 #endif
 #ifndef USE_DOMM
+#ifdef USE_EXT_FIELD
+    node_list%node(i)%b_vac_field     = t_b_vac_field(i,:,:,:)
+#else
     node_list%node(i)%chi_correction  = t_chi_correction(i,:,:)
+#endif
 #endif
     node_list%node(i)%j_source = 0.d0 
     do m=1,n_tor_tmp,2
@@ -1388,7 +1532,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
     element_list%element(i)%nref                    = t_nref(i)
   end do
    
-  call HDF5_real_reading(file_id,tstep,'tstep')
+  call HDF5_real_reading(file_id,tstep_rst,'tstep')
   call HDF5_real_reading(file_id,eta_rst,'eta')
   call HDF5_real_reading(file_id,visco_rst,'visco')
   call HDF5_real_reading(file_id,visco_par_rst,'visco_par')
@@ -1880,6 +2024,10 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
       call tr_deallocate(xtime_rad_power,"xtime_rad_power",CAT_UNKNOWN)
     call tr_allocate(xtime_rad_power,1,index_start+nstep,"xtime_rad_power",CAT_UNKNOWN)
     call HDF5_array1D_reading(file_id,xtime_rad_power,"xtime_rad_power")
+    if (allocated(xtime_rad_cooling_power)) &
+    call tr_deallocate(xtime_rad_cooling_power,"xtime_rad_cooling_power",CAT_UNKNOWN)
+  call tr_allocate(xtime_rad_cooling_power,1,index_start+nstep,"xtime_rad_cooling_power",CAT_UNKNOWN)
+  call HDF5_array1D_reading(file_id,xtime_rad_cooling_power,"xtime_rad_cooling_power")
     if (allocated(xtime_E_ion)) &
       call tr_deallocate(xtime_E_ion,"xtime_E_ion",CAT_UNKNOWN)
     call tr_allocate(xtime_E_ion,1,index_start+nstep,"xtime_E_ion",CAT_UNKNOWN)
@@ -1899,31 +2047,110 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
     if (n_spi_tot >= 1) then
 
       if (index_start >= 1) then
-        if (allocated(xtime_spi_ablation)) &
-          call tr_deallocate(xtime_spi_ablation,"xtime_spi_ablation",CAT_UNKNOWN)
-        call tr_allocate(xtime_spi_ablation,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation",CAT_UNKNOWN)
-        if (allocated(xtime_spi_ablation_rate)) &
-          call tr_deallocate(xtime_spi_ablation_rate,"xtime_spi_ablation_rate",CAT_UNKNOWN)
-        call tr_allocate(xtime_spi_ablation_rate,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_rate",CAT_UNKNOWN)
-        if (allocated(xtime_spi_ablation_bg)) &
-          call tr_deallocate(xtime_spi_ablation_bg,"xtime_spi_ablation_bg",CAT_UNKNOWN)
-        call tr_allocate(xtime_spi_ablation_bg,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_bg",CAT_UNKNOWN)
-        if (allocated(xtime_spi_ablation_bg_rate)) &
-          call tr_deallocate(xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
-        call tr_allocate(xtime_spi_ablation_bg_rate,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+        if (spi_abl_history_old) then
+          ! For the h5 file, check the restart file to consistency
+          var_rank = 0
+          if(allocated(var_dims)) deallocate(var_dims)
+          call HDF5_extract_dataset_rank_shape(file_id,var_rank,var_dims,"xtime_spi_ablation")
+          if(var_dims(1) .ne. n_spi_tot) then
+            write(*,*) "WARNING! Dimention of xtime_spi_ablation not equal to n_spi_tot, check if the correct spi_abl_history_old flag is set! Exiting!", var_dims(1), n_spi_tot
+            stop
+          endif
+          if(allocated(var_dims)) deallocate(var_dims)
+          if (allocated(xtime_spi_ablation_tmp)) &
+            call tr_deallocate(xtime_spi_ablation_tmp,"xtime_spi_ablation",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_tmp,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_rate_tmp)) &
+            call tr_deallocate(xtime_spi_ablation_rate_tmp,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_rate_tmp,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg_tmp)) &
+            call tr_deallocate(xtime_spi_ablation_bg_tmp,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg_tmp,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg_rate_tmp)) &
+            call tr_deallocate(xtime_spi_ablation_bg_rate_tmp,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg_rate_tmp,1,n_spi_tot,1,index_start+nstep,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
 
-        call HDF5_array2D_reading(file_id,xtime_spi_ablation,"xtime_spi_ablation")
-        call HDF5_array2D_reading(file_id,xtime_spi_ablation_rate,"xtime_spi_ablation_rate")
+          call HDF5_array2D_reading(file_id,xtime_spi_ablation_tmp,"xtime_spi_ablation")
+          call HDF5_array2D_reading(file_id,xtime_spi_ablation_rate_tmp,"xtime_spi_ablation_rate")
 
-        call H5Lexists_f(file_id,"xtime_spi_ablation_bg",flag_exists,err_exists) !Backward compatibility
-        if (flag_exists .and. err_exists == 0) then
-          call HDF5_array2D_reading(file_id,xtime_spi_ablation_bg,"xtime_spi_ablation_bg")
-          call HDF5_array2D_reading(file_id,xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate")
+          call H5Lexists_f(file_id,"xtime_spi_ablation_bg",flag_exists,err_exists) !Backward compatibility
+          if (flag_exists .and. err_exists == 0) then
+            call HDF5_array2D_reading(file_id,xtime_spi_ablation_bg_tmp,"xtime_spi_ablation_bg")
+            call HDF5_array2D_reading(file_id,xtime_spi_ablation_bg_rate_tmp,"xtime_spi_ablation_bg_rate")
+          else
+            xtime_spi_ablation_bg_tmp = 0.
+            xtime_spi_ablation_bg_rate_tmp = 0.
+            write(*,*)"Backward Compatibility: No bg species ablation history information found, assuming none."
+          end if
+
+          if (allocated(xtime_spi_ablation)) &
+            call tr_deallocate(xtime_spi_ablation,"xtime_spi_ablation",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation,1,n_inj,1,index_start+nstep,"xtime_spi_ablation",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_rate)) &
+            call tr_deallocate(xtime_spi_ablation_rate,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_rate,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg)) &
+            call tr_deallocate(xtime_spi_ablation_bg,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg_rate)) &
+            call tr_deallocate(xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg_rate,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+
+          p_begin = 0
+          xtime_spi_ablation = 0.0
+          xtime_spi_ablation_rate = 0.0
+          xtime_spi_ablation_bg = 0.0
+          xtime_spi_ablation_bg_rate = 0.0
+          do i_inj = 1, n_inj
+            do i_p = 1, n_spi(i_inj)
+              xtime_spi_ablation(i_inj,:) = xtime_spi_ablation(i_inj,:) + xtime_spi_ablation_tmp(i_p+p_begin,:)
+              xtime_spi_ablation_rate(i_inj,:) = xtime_spi_ablation_rate(i_inj,:) + xtime_spi_ablation_rate_tmp(i_p+p_begin,:)
+              xtime_spi_ablation_bg(i_inj,:) = xtime_spi_ablation_bg(i_inj,:) + xtime_spi_ablation_bg_tmp(i_p+p_begin,:)
+              xtime_spi_ablation_bg_rate(i_inj,:) = xtime_spi_ablation_bg_rate(i_inj,:) + xtime_spi_ablation_bg_rate_tmp(i_p+p_begin,:)
+            end do  
+            p_begin = p_begin + n_spi(i_inj)
+          end do
+
+          call tr_deallocate(xtime_spi_ablation_tmp,"xtime_spi_ablation",CAT_UNKNOWN)
+          call tr_deallocate(xtime_spi_ablation_rate_tmp,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          call tr_deallocate(xtime_spi_ablation_bg_tmp,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          call tr_deallocate(xtime_spi_ablation_bg_rate_tmp,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
         else
-          xtime_spi_ablation_bg = 0.
-          xtime_spi_ablation_bg_rate = 0.
-          write(*,*)"Backward Compatibility: No bg species ablation history information found, assuming none."
-        end if
+          ! For the h5 file, check the restart file to consistency
+          var_rank = 0
+          if(allocated(var_dims)) deallocate(var_dims)
+          call HDF5_extract_dataset_rank_shape(file_id,var_rank,var_dims,"xtime_spi_ablation")
+          if(var_dims(1) .ne. n_inj) then
+            write(*,*) "WARNING! Dimention of xtime_spi_ablation not equal to n_inj, check if the correct spi_abl_history_old flag is set! Exiting!", var_dims(1), n_inj
+            stop
+          endif
+          if(allocated(var_dims)) deallocate(var_dims)
+          if (allocated(xtime_spi_ablation)) &
+            call tr_deallocate(xtime_spi_ablation,"xtime_spi_ablation",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation,1,n_inj,1,index_start+nstep,"xtime_spi_ablation",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_rate)) &
+            call tr_deallocate(xtime_spi_ablation_rate,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_rate,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_rate",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg)) &
+            call tr_deallocate(xtime_spi_ablation_bg,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_bg",CAT_UNKNOWN)
+          if (allocated(xtime_spi_ablation_bg_rate)) &
+            call tr_deallocate(xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+          call tr_allocate(xtime_spi_ablation_bg_rate,1,n_inj,1,index_start+nstep,"xtime_spi_ablation_bg_rate",CAT_UNKNOWN)
+
+          call HDF5_array2D_reading(file_id,xtime_spi_ablation,"xtime_spi_ablation")
+          call HDF5_array2D_reading(file_id,xtime_spi_ablation_rate,"xtime_spi_ablation_rate")
+
+          call H5Lexists_f(file_id,"xtime_spi_ablation_bg",flag_exists,err_exists) !Backward compatibility
+          if (flag_exists .and. err_exists == 0) then
+            call HDF5_array2D_reading(file_id,xtime_spi_ablation_bg,"xtime_spi_ablation_bg")
+            call HDF5_array2D_reading(file_id,xtime_spi_ablation_bg_rate,"xtime_spi_ablation_bg_rate")
+          else
+            xtime_spi_ablation_bg = 0.
+            xtime_spi_ablation_bg_rate = 0.
+            write(*,*)"Backward Compatibility: No bg species ablation history information found, assuming none."
+          end if
+        endif
       end if
 
       call H5Lexists_f(file_id,"n_spi_tot",flag_exists,err_exists) !Backward compatibility
@@ -2177,7 +2404,9 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
         do m=2,n_tor
           if ( new_mode(m) .eq. 1 ) then
           node_list%node(i)%values(m,:,:) = 0.d0
-          node_list%node(i)%values(m,:,var_rho)   = amplitude * node_list%node(i)%values(1,:,var_rho)
+          if (with_rho) then
+            node_list%node(i)%values(m,:,var_rho)   = amplitude * node_list%node(i)%values(1,:,var_rho)
+          endif
 #ifdef WITH_TiTe
           node_list%node(i)%values(m,:,var_Ti)   = amplitude * node_list%node(i)%values(1,:,var_Ti)
           node_list%node(i)%values(m,:,var_Te)   = amplitude * node_list%node(i)%values(1,:,var_Te)
@@ -2213,6 +2442,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
   call tr_deallocate(t_r_tor_eq,"t_r_tor_eq",CAT_UNKNOWN)
   call tr_deallocate(t_j_field,"t_j_field",CAT_UNKNOWN)
   call tr_deallocate(t_b_field,"t_b_field",CAT_UNKNOWN)
+  call tr_deallocate(t_b_vac_field,"t_b_vac_field",CAT_UNKNOWN)
   call tr_deallocate(t_chi_correction,"t_chi_correction",CAT_UNKNOWN)
   call tr_deallocate(t_j_source,"t_j_source",CAT_UNKNOWN)
 #endif
@@ -2257,7 +2487,7 @@ subroutine import_hdf5_restart(node_list, element_list, filename, format_rst, er
 #else
   write (6,*) " ERROR: trying to import with hdf5 but USE_HDF5 was not set at compile-time"
 #endif
-  call populate_element_rtree(node_list, element_list)
+  call populate_element_rtree(node_list, element_list, use_3D_rtree)
 
   equil_initialized = .true.
   write(*,*) ' restart complete '
@@ -2453,5 +2683,43 @@ subroutine import_hdf5_restart_aux(aux_node_list, filename, format_rst, error)
 #endif
   return
 end subroutine import_hdf5_restart_aux
+
+
+
+
+
+
+!< Checks if a restart file exists in the current directory
+!< Returns -1 if not found, and the digit format index if found (1 for 6 digits), (2 for 5 digits)
+integer function restart_file_exists(i_step)
+
+  use phys_module, only : rst_hdf5
+
+  implicit none
+
+  integer, intent(in) :: i_step
+  integer             :: i_fmt
+  character(len=64)   :: file_name, extension
+  logical             :: file_exists
+
+  restart_file_exists = -1
+
+  ! Determine the file extension
+  extension = '.rst'
+  if (rst_hdf5 .ne. 0) extension = '.h5'
+
+  ! Check each possible format
+  do i_fmt = 1, size(rst_file_ind_fmt)
+    write(file_name, rst_file_ind_fmt(i_fmt)) 'jorek', i_step
+    inquire(file=trim(file_name) // extension, exist=file_exists)
+
+    if (file_exists) then
+      restart_file_exists = i_fmt
+      return
+    end if
+  end do
+
+end function restart_file_exists
+
 
 end module mod_import_restart

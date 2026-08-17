@@ -440,6 +440,7 @@ module vacuum
     FB_Zaxis_integral    = 0.d0
     n_feedback_vertical  = 1
     start_VFB            = 10
+    n_pf_coils = 0
     
     n_iter_freeb         = 900
     
@@ -617,7 +618,7 @@ module vacuum
     integer   :: n_diag_coil = 0, n_pf_coil = 0, n_rmp_coil = 0
     character :: t_freeboundary, t_resistive_wall
     real*8, allocatable :: t_diag_coil_curr(:,:), t_pf_coil_curr(:,:), t_rmp_coil_curr(:,:)
-    character, allocatable :: t_diag_coil_name(:), t_pf_coil_name(:), t_rmp_coil_name(:)
+    character(len=COIL_NAME_LEN), allocatable :: t_diag_coil_name(:), t_pf_coil_name(:), t_rmp_coil_name(:)
     real*8, allocatable :: t_net_tor_wall_curr(:)   
     real*8, allocatable :: t_vert_FB_response(:,:)
  
@@ -674,7 +675,7 @@ module vacuum
             diag_coil_curr(1:index_start,:) = t_diag_coil_curr(1:index_start,:)
             deallocate(t_diag_coil_curr)
 
-            allocate( t_diag_coil_name(n_diag_coil*COIL_NAME_LEN) )
+            allocate( t_diag_coil_name(n_diag_coil) )
             call HDF5_array1D_reading_char(file_id,t_diag_coil_name,"diag_coil_name")
             allocate( diag_coil_name(n_diag_coil) )
             diag_coil_name = transfer(t_diag_coil_name,diag_coil_name)
@@ -695,7 +696,7 @@ module vacuum
             pf_coil_curr(1:index_start,:) = t_pf_coil_curr(1:index_start,:)
             deallocate(t_pf_coil_curr)
 
-            allocate( t_pf_coil_name(n_pf_coil*COIL_NAME_LEN) )
+            allocate( t_pf_coil_name(n_pf_coil) )
             call HDF5_array1D_reading_char(file_id,t_pf_coil_name,"pf_coil_name")
             allocate( pf_coil_name(n_pf_coil) )
             pf_coil_name = transfer(t_pf_coil_name,pf_coil_name)
@@ -716,7 +717,7 @@ module vacuum
             rmp_coil_curr(1:index_start,:) = t_rmp_coil_curr(1:index_start,:)
             deallocate(t_rmp_coil_curr)
 
-            allocate( t_rmp_coil_name(n_rmp_coil*COIL_NAME_LEN) )
+            allocate( t_rmp_coil_name(n_rmp_coil) )
             call HDF5_array1D_reading_char(file_id,t_rmp_coil_name,"rmp_coil_name")
             allocate( rmp_coil_name(n_rmp_coil) )
             rmp_coil_name = transfer(t_rmp_coil_name,rmp_coil_name)

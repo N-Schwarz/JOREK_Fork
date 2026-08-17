@@ -22,13 +22,15 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 rst_hdf5, rst_hdf5_version, keep_current_prof,      &
                 eta, visco, visco_par,                              &
                 restart, rst_format, regrid, bootstrap, write_ps,   &
-                regrid_from_rz,                                     &
+                bootstrap_psin_cutoff,                              &
+                regrid_from_rz, force_horizontal_Xline,             &
                 n_R, n_Z, n_radial, n_pol, n_tht, n_flux,           &
                 n_open, n_private, n_leg, n_leg_out, n_ext,         &
                 n_outer, n_inner, n_up_priv, n_up_leg, n_up_leg_out,&
                 n_tht_equidistant,                                  &
                 psi_axis_init, XR_r, SIG_r, XR_tht, SIG_tht,        &
                 XR_z, SIG_z, bgf_r, bgf_z, bgf_rpolar, bgf_tht,     &
+                xr_closed,                                          &
                 SIG_closed, SIG_open, SIG_private, SIG_theta,       &
                 SIG_leg_0, SIG_leg_1, dPSI_open, dPSI_private,      &
                 SIG_up_leg_0, SIG_up_leg_1, SIG_up_priv,            &
@@ -40,7 +42,6 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 R_geo, Z_geo, amin, mf, fbnd, fpsi, mode,           &
                 R_boundary, Z_boundary, psi_boundary, n_boundary,   &
                 R_Z_psi_bnd_file,                                   &
-                force_horizontal_Xline,                             &
                 n_pfc, manipulate_psi_map,                          &
                 Rmin_pfc, Rmax_pfc, Zmin_pfc, Zmax_pfc, current_pfc,&
                 n_jropes,                                           &
@@ -97,6 +98,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 wall_resistivity, wall_resistivity_fact,            &
                 bc_natural_open,                                    &
                 use_mumps_eq, use_pastix_eq, use_strumpack_eq,      &
+                use_mumps_prj, use_pastix_prj, use_strumpack_prj,   &
                 use_mumps, mumps_ordering,                          &
                 use_BLR_compression, epsilon_BLR, just_in_time_BLR, &
                 use_pastix, use_murge, use_murge_element, use_wsmp, &
@@ -130,12 +132,12 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 RMP_psi_cos_file, RMP_psi_sin_file,                 &
                 V_0,V_1,V_coef, output_bnd_elements,                &
                 n_limiter, R_limiter, Z_limiter,                    &
-                first_target_point, last_target_point,		    &
+                first_target_point, last_target_point,              &
                 R_Z_psi_bnd_file, wall_file,time_evol_scheme,       &
                 spi_tor_rot, tor_frequency, spi_num_vol,            &
                 NEO, neo_file, aki_neo_const, amu_neo_const,        &
                 D_prof_neg_thresh, ZK_prof_neg_thresh, T_min,       &
-				T_min_neg,rho_min_neg,                              &
+                T_min_neg,rho_min_neg,                              &
                 ne_SI_min, Te_eV_min, rn0_min,                      &
                 D_neutral_x, D_neutral_y, D_neutral_p,              &
                 neutral_reflection, rho_min,                        &
@@ -153,7 +155,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 spi_Vel_diff, t_ns, JET_MGI, ASDEX_MGI,             &
                 delta_n_convection, nimp_bg, output_prad_phi,       &
                 RMP_on, RMP_har_cos,RMP_har_sin, spi_shard_file,    &
-                spi_plume_file, spi_plume_hdf5,                     &
+                spi_plume_file, spi_plume_hdf5, spi_abl_mag_reduction, &
                 RMP_growth_rate, RMP_ramp_up_time,                  &
                 RMP_psi_cos_file, RMP_psi_sin_file,                 &
                 Number_RMP_harmonics,RMP_har_cos_spectrum,          &
@@ -179,13 +181,12 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 tgnum_psi, tgnum_u, tgnum_zj, tgnum_w, tgnum_rho,   &
                 tgnum_T, tgnum_Ti, tgnum_Te, tgnum_vpar, tgnum_rhon,&
                 tgnum_nre, tgnum_AR, tgnum_AZ, tgnum_A3,            &
-                n_particles, tstep_particles, nstep_particles,      &
+                tstep_particles, nstep_particles,                   &
                 nsubstep_particles,                                 &
                 filter_perp,    filter_hyper,    filter_par,        &
                 filter_perp_n0, filter_hyper_n0, filter_par_n0,     &
-                use_kn_cx, use_kn_sputtering, use_kn_ionisation,             &
-                use_ncs, use_pcs, use_ccs,                          &
                 use_manual_random_seed, manual_seed,                &
+                use_fixed_rng_value, fixed_rng_value,               &
                 min_sheath_angle, bcs, cte_current_FB_fact, vacuum_min,      &
                 export_aux_node_list, xpoint_search_tries
 
@@ -211,6 +212,13 @@ if (my_id .eq. 0) then
   else
     read(5,in1)
   endif
+
+  
+  if ( ( n_tor .eq. 1 ) .and. freeboundary .and. (.not. freeboundary_equil) ) then
+    write(*,*) 'WARNING: The parameter freeboundary is automatically changed to .false. since n_tor==1 and freeboundary_equil is .false.'
+    freeboundary= .false.
+  end if
+
 
   ! --- Calculate normalisation factor for MGI source (related to its toroidal shape)
   ns_tor_norm = ns_deltaphi * PI**0.5 * ERF(PI/ns_deltaphi)

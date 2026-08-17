@@ -168,6 +168,7 @@ subroutine export_binary_restart(node_list,element_list,filename,aux_node_list)
   ! Radiation and ionization energy history
   if (index_now .gt. 0) write(21) xtime_radiation(1:index_now)
   if (index_now .gt. 0) write(21) xtime_rad_power(1:index_now)
+  if (index_now .gt. 0) write(21) xtime_rad_cooling_power(1:index_now)
   if (index_now .gt. 0) write(21) xtime_E_ion(1:index_now)
   if (index_now .gt. 0) write(21) xtime_E_ion_power(1:index_now)
   if (index_now .gt. 0) write(21) xtime_P_ei(1:index_now)
@@ -285,6 +286,7 @@ subroutine export_binary_restart(node_list,element_list,filename,aux_node_list)
   write(21) n_degrees
   write(21) nref_max
   write(21) n_ref_list
+  write(21) n_aux_var
 
   close(21)
 
@@ -330,14 +332,18 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
   real(RKIND), allocatable :: t_x(:,:,:,:)                 ! n_coord_tor, n_degrees, n_dim
   real(RKIND), allocatable :: t_values(:,:,:,:)            !       n_tor, n_degrees, n_var
   real(RKIND), allocatable :: t_deltas(:,:,:,:)            !       n_tor, n_degrees, n_var
-  real(RKIND), allocatable :: t_aux_values(:,:,:,:)        !       n_tor, n_degrees, n_var
+  real(RKIND), allocatable :: t_aux_values(:,:,:,:)        !       n_tor, n_degrees, n_aux_var
+  
+  ! Stellarator node members
   real(RKIND), allocatable :: t_pressure(:,:)              !              n_degrees
   real(RKIND), allocatable :: t_r_tor_eq(:,:)              !              n_degrees
   real(RKIND), allocatable :: t_j_field(:,:,:,:)           ! n_coord_tor, n_degrees, n_dim
   real(RKIND), allocatable :: t_b_field(:,:,:,:)           ! n_coord_tor, n_degrees, n_dim
+  real(RKIND), allocatable :: t_b_vac_field(:,:,:,:)       ! n_coord_tor, n_degrees, n_dim
   real(RKIND), allocatable :: t_chi_correction(:,:,:)      ! n_coord_tor, n_degrees
   real(RKIND), allocatable :: t_j_source(:,:,:)            !       n_tor, n_degrees
 
+  ! Full MHD node members
   real(RKIND), allocatable :: t_psi_eq(:,:)                ! n_degrees
   real(RKIND), allocatable :: t_Fprof_eq(:,:)              ! n_degrees
 
@@ -364,7 +370,7 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
 
   ! for axis treatment setting
   character(len=50)        :: t_treat_axis
-  
+
   ! local variables
   real*8, allocatable :: spi_R_arr (:)
   real*8, allocatable :: spi_Z_arr (:)
@@ -404,7 +410,7 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
        "node_list%deltas",CAT_UNKNOWN)
   if(present(aux_node_list)) then
     if(export_aux_node_list .and. associated(aux_node_list)) then
-      call tr_allocate(t_aux_values,1,node_list%n_nodes,1,n_tor,1,n_degrees,1,n_var, &
+      call tr_allocate(t_aux_values,1,node_list%n_nodes,1,n_tor,1,n_degrees,1,n_aux_var, &
           "aux_node_list%values",CAT_UNKNOWN)
     endif
   endif
@@ -417,6 +423,8 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
        "node_list%j_field",CAT_UNKNOWN)                                           
   call tr_allocate(t_b_field,1,node_list%n_nodes,1,n_coord_tor,1,n_degrees,1,n_dim+1, &
        "node_list%b_field",CAT_UNKNOWN)
+  call tr_allocate(t_b_vac_field,1,node_list%n_nodes,1,n_coord_tor,1,n_degrees,1,n_dim+1, &
+       "node_list%b_vac_field",CAT_UNKNOWN)
   call tr_allocate(t_chi_correction,1,node_list%n_nodes,1,n_coord_tor,1,n_degrees, &
        "node_list%chi_correction",CAT_UNKNOWN)
   call tr_allocate(t_j_source,1,node_list%n_nodes,1,n_tor,1,n_degrees, &
@@ -492,10 +500,14 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
 #if JOREK_MODEL == 180
      t_pressure(i,:)           = node_list%node(i)%pressure
      t_j_field(i,:,:,:)        = node_list%node(i)%j_field
-     t_b_field(i,:,:,:)        = node_list%node(i)%b_field
+     t_b_field(i,:,:,:)        = node_list%node(i)%b_field     
 #endif
 #ifndef USE_DOMM
+#ifdef USE_EXT_FIELD
+     t_b_vac_field(i,:,:,:)    = node_list%node(i)%b_vac_field
+#else
      t_chi_correction(i,:,:)   = node_list%node(i)%chi_correction
+#endif
 #endif
      t_j_source(i,:,:)         = node_list%node(i)%j_source
 #endif
@@ -593,6 +605,7 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
   call HDF5_integer_saving(file_id,n_degrees,'n_degrees'//char(0))
   call HDF5_integer_saving(file_id,nref_max,'nref_max'//char(0))
   call HDF5_integer_saving(file_id,n_ref_list,'n_ref_list'//char(0))
+  call HDF5_integer_saving(file_id,n_aux_var,'n_aux_var'//char(0))
 
   ! -> 
   call HDF5_integer_saving(file_id,node_list%n_nodes,'n_nodes'//char(0))
@@ -614,7 +627,7 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
     if(export_aux_node_list .and. associated(aux_node_list)) then
       if(aux_node_list%n_nodes .gt. 0) then
         call HDF5_array4D_saving(file_id,t_aux_values, &
-           node_list%n_nodes,n_tor,n_degrees,n_var,'aux_values'//char(0))
+           node_list%n_nodes,n_tor,n_degrees,n_aux_var,'aux_values'//char(0))
       endif
     endif
   endif
@@ -623,20 +636,37 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
   call HDF5_array2D_saving(file_id,t_r_tor_eq, &
        node_list%n_nodes,n_degrees,'r_tor_eq'//char(0))
 #if JOREK_MODEL == 180
+  ! Save GVEC fields (pressure and j_field only needed in model180)
   call HDF5_array2D_saving(file_id,t_pressure, &
        node_list%n_nodes,n_degrees,'pressure'//char(0))
   call HDF5_array4D_saving(file_id,t_j_field, &
        node_list%n_nodes,n_coord_tor,n_degrees,n_dim+1,'j_field'//char(0))
   call HDF5_array4D_saving(file_id,t_b_field, &
        node_list%n_nodes,n_coord_tor,n_degrees,n_dim+1,'b_field'//char(0))
+#endif /* JOREK_MODEL == 180 */
+
+#ifdef WITH_TiTe
+  call HDF5_real_saving(file_id,Ti_0,'Ti_0'//char(0))
+  call HDF5_real_saving(file_id,Te_0,'Te_0'//char(0))
+#else
+  call HDF5_real_saving(file_id,T_0,'T_0'//char(0))
 #endif
+
 #ifndef USE_DOMM
+#ifdef USE_EXT_FIELD
+  call HDF5_array4D_saving(file_id,t_b_vac_field, &
+       node_list%n_nodes,n_coord_tor,n_degrees,n_dim+1,'b_vac_field'//char(0))
+#else
   call HDF5_array3D_saving(file_id,t_chi_correction, &
        node_list%n_nodes,n_coord_tor,n_degrees,'chi_correction'//char(0))
 #endif
+#endif
   call HDF5_array3D_saving(file_id,t_j_source, &
        node_list%n_nodes,n_tor,n_degrees,'j_source'//char(0))
-#endif
+  
+  call HDF5_integer_saving(file_id,n_flux,'n_flux'//char(0))
+  call HDF5_integer_saving(file_id,n_tht, 'n_tht'//char(0))
+#endif /* STELLARATOR_MODEL */
 
 #ifdef fullmhd
   call HDF5_array2D_saving(file_id,t_psi_eq, &
@@ -820,24 +850,26 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
 
   ! Radiation and ionization energy history
   if (index_now .gt. 0) then
-    if ( allocated(xtime_radiation)   ) call HDF5_array1D_saving(file_id,xtime_radiation, index_now,'xtime_radiation'//char(0))
-    if ( allocated(xtime_rad_power)   ) call HDF5_array1D_saving(file_id,xtime_rad_power, index_now,'xtime_rad_power'//char(0))
-    if ( allocated(xtime_E_ion)       ) call HDF5_array1D_saving(file_id,xtime_E_ion, index_now,'xtime_E_ion'//char(0))
-    if ( allocated(xtime_E_ion_power) ) call HDF5_array1D_saving(file_id,xtime_E_ion_power, index_now,'xtime_E_ion_power'//char(0))
-    if ( allocated(xtime_P_ei)        ) call HDF5_array1D_saving(file_id,xtime_P_ei, index_now,'xtime_P_ei'//char(0))
+    if ( allocated(xtime_radiation)        ) call HDF5_array1D_saving(file_id,xtime_radiation, index_now,'xtime_radiation'//char(0))
+    if ( allocated(xtime_rad_power)        ) call HDF5_array1D_saving(file_id,xtime_rad_power, index_now,'xtime_rad_power'//char(0))
+    if ( allocated(xtime_rad_cooling_power)) call HDF5_array1D_saving(file_id,xtime_rad_cooling_power, index_now,'xtime_rad_cooling_power'//char(0))
+
+    if ( allocated(xtime_E_ion)            ) call HDF5_array1D_saving(file_id,xtime_E_ion, index_now,'xtime_E_ion'//char(0))
+    if ( allocated(xtime_E_ion_power)      ) call HDF5_array1D_saving(file_id,xtime_E_ion_power, index_now,'xtime_E_ion_power'//char(0))
+    if ( allocated(xtime_P_ei)             ) call HDF5_array1D_saving(file_id,xtime_P_ei, index_now,'xtime_P_ei'//char(0))
   end if
 
   ! Dynamically allocate memeries for temporary arrays in order to export
-  if (using_spi .and. n_spi_tot>=1) then
+  if (using_spi .and. n_inj>=1) then
     if (index_now .gt. 0) then
       call HDF5_array2D_saving(file_id,xtime_spi_ablation, &
-             n_spi_tot,index_now,'xtime_spi_ablation'//char(0))
+             n_inj,index_now,'xtime_spi_ablation'//char(0))
       call HDF5_array2D_saving(file_id,xtime_spi_ablation_rate, &
-             n_spi_tot,index_now,'xtime_spi_ablation_rate'//char(0))
+             n_inj,index_now,'xtime_spi_ablation_rate'//char(0))
       call HDF5_array2D_saving(file_id,xtime_spi_ablation_bg, &
-             n_spi_tot,index_now,'xtime_spi_ablation_bg'//char(0))
+             n_inj,index_now,'xtime_spi_ablation_bg'//char(0))
       call HDF5_array2D_saving(file_id,xtime_spi_ablation_bg_rate, &
-             n_spi_tot,index_now,'xtime_spi_ablation_bg_rate'//char(0))
+             n_inj,index_now,'xtime_spi_ablation_bg_rate'//char(0))
     end if
 
     call HDF5_integer_saving(file_id,n_inj,"n_inj"//char(0))
@@ -966,6 +998,7 @@ subroutine export_hdf5_restart(node_list,element_list,filename,aux_node_list)
   call tr_deallocate(t_r_tor_eq,"r_tor_eq",CAT_UNKNOWN)
   call tr_deallocate(t_j_field,"j_field",CAT_UNKNOWN)
   call tr_deallocate(t_b_field,"b_field",CAT_UNKNOWN)
+  call tr_deallocate(t_b_vac_field,"b_vac_field",CAT_UNKNOWN)
   call tr_deallocate(t_chi_correction,"chi_correction",CAT_UNKNOWN)
   call tr_deallocate(t_j_source,"j_source",CAT_UNKNOWN)
 #elif fullmhd

@@ -18,6 +18,7 @@ use mod_plasma_functions
 use mod_import_restart
 use equil_info, only : get_psi_n, ES
 use mod_interp
+use constants, only : ATOMIC_MASS_UNIT
 
 implicit none
 
@@ -99,7 +100,7 @@ call import_restart(node_list,element_list, 'jorek_restart', rst_format, ierr, .
 
 call initialise_basis                              ! define the basis functions at the Gaussian points
 
-rho_norm = central_density*1.d20 * central_mass * 1.67d-27
+rho_norm = central_density*1.d20 * central_mass * ATOMIC_MASS_UNIT
 t_norm   = sqrt(MU_zero*rho_norm)
 
 ! --- Find the lowest point on the outer divertor target (required later)
@@ -360,7 +361,11 @@ do m=1, n_plane
           psi_norm = get_psi_n(psi, Z)
 
           D_prof   = get_dperp (psi_norm)
-          ZK_prof  = get_zkperp(psi_norm)
+          if (use_zkperp_times_density) then
+            ZK_prof = get_zkperp(psi_norm) * max(rho,zkperp_density_floor)
+          else
+            ZK_prof = get_zkperp(psi_norm)
+          endif
 
           call conductivity_parallel(ZK_par, ZK_par_max, T, corr_neg_temp(T), T_min_ZKpar, T_0, ZKpar_T)
 

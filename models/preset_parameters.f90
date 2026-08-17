@@ -6,9 +6,11 @@
 subroutine preset_parameters
   
   use phys_module
-  
   implicit none
-  
+
+  integer :: i, j ! for iterations
+  character(len=20) :: tmp !< for temporary name tag
+
   time_evol_scheme = 'Crank-Nicholson'
   
   n_tor_fft_thresh = 2
@@ -82,8 +84,8 @@ subroutine preset_parameters
   visco_par_heating = 0.d0
   visco_old_setup   = .false.
   
-  central_density = 1.d0        ! the central density in units 10^20 m^-3
-  central_mass    = 2.d0        ! the central average ion mass (D)
+  central_density = 1.d0            ! the central density in units 10^20 m^-3
+  central_mass    = 2.01410177811d0 ! the central average mass (atomic mass of deuterium, including electron)
 
   n_tor_restart= 0
   restart      = .false.
@@ -93,6 +95,10 @@ subroutine preset_parameters
   rst_format   = 0             ! use 'old' format for restart import
   write_ps     = .true.           ! write postscript file at the end of the run 
   gvec_grid_import = .false.
+  extended_boundary = .false.
+  j_cutoff_rcoord = 99.0
+  j_cutoff_sig = 0.025
+  bloating_factor = 1.0d0
 
   freeboundary_equil = .false. ! use free or fixed boundary equilibrium
   freeboundary       = .false. ! use free or fixed boundary?
@@ -168,7 +174,8 @@ subroutine preset_parameters
   bgf_rpolar    = 0.6
   bgf_tht       = 0.6
 
-  SIG_closed  = 0.1d0
+  xr_closed   = (/   1.0d0, 9999.d0, 9999.d0 /)
+  SIG_closed  = (/   0.1d0, 9999.d0, 0.1d0   /)
   SIG_open    = 0.1d0
   SIG_outer   = 0.1d0
   SIG_inner   = 0.1d0
@@ -223,6 +230,7 @@ subroutine preset_parameters
   T_jropes       = 0.d0
 
   bootstrap = .false.
+  bootstrap_psin_cutoff = 0.9995
 
   ellip  = 1.d0
   tria_u = 0.d0
@@ -254,6 +262,7 @@ subroutine preset_parameters
 
   rect_grid_vac_psi = 0.d0
   
+  maintain_profiles = .false.
   ZK_perp(1:5)   = (/ 1.d-5, 0.d0, 0.d0, 99.d0, 99.d0 /)
   ZK_i_perp(1:5) = (/ 1.d-5, 0.d0, 0.d0, 99.d0, 99.d0 /)
   ZK_e_perp(1:5) = (/ 1.d-5, 0.d0, 0.d0, 99.d0, 99.d0 /)
@@ -263,6 +272,9 @@ subroutine preset_parameters
   ZK_par_max   = 1.d20
   D_perp(1:5)  = (/ 1.d-5, 0.d0, 0.d0, 99.d0, 99.d0 /)
   D_par        = 0.d0
+  V_pinch_gauss = 0.d0
+  V_pinch_psin  = 0.d0
+  V_pinch_sig   = 1.d0
   D_perp_imp(1:5)  = (/ 1.d-5, 0.d0, 0.d0, 99.d0, 99.d0 /)
   D_par_imp        = 0.d0
 
@@ -582,12 +594,14 @@ subroutine preset_parameters
   pellet_density_bg = 5.958d8
   use_pellet        = .false.
   
+  tstep_rst   = 0.d0
   t_now       = 0.d0
   t_start     = 0.d0
   index_start = 0
 
   nout = 9999999
   nout_projection = -1
+  nout_particles  = 9999999
 
   rst_hdf5 = 1   ! =0,restart with binary files; =1, with HDF5 files
 
@@ -610,8 +624,9 @@ subroutine preset_parameters
   zk_perp_file       = 'none'
   zk_e_perp_file     = 'none'
   zk_i_perp_file     = 'none'
+  v_pinch_file       = 'none'
   R_Z_psi_bnd_file   = 'none'
-  wall_file          = 'none'
+  wall_file          = 'wall.txt'
   rot_file           = 'none'
   domm_file          = 'none'
   normalized_velocity_profile = .true.
@@ -624,6 +639,9 @@ subroutine preset_parameters
   
   keep_n0_const      = .false.
   linear_run         = .false.
+
+  use_zkperp_times_density = .false.
+  zkperp_density_floor = 1.d-2
   
   export_for_nemec   = .false.
   export_aux_node_list = .true.
@@ -670,14 +688,18 @@ subroutine preset_parameters
   current_prof_initialized = .false.
   
   use_mumps          = .false.              ! Use MUMPS solver
-  use_pastix         = .true.               ! Use PASTIX solver
-  use_strumpack      = .false.              ! Use STRUMPACK solver  
+  use_pastix         = .false.              ! Use PASTIX solver
+  use_strumpack      = .true.               ! Use STRUMPACK solver  
   use_wsmp           = .false.              ! Use WSMP solver (use with care, still in development!)
   
   use_mumps_eq       = .false.              ! Use MUMPS equilibrium solver
   use_pastix_eq      = .false.              ! Use PASTIX equilibrium solver
   use_strumpack_eq   = .false.              ! Use STRUMPACK equilibrium olver  
   
+  use_mumps_prj      = .true.               ! Use MUMPS projection solver
+  use_pastix_prj     = .false.              ! Use PASTIX projection solver
+  use_strumpack_prj  = .false.              ! Use STRUMPACK projection olver  
+
   refinement         = .false.              ! enable mesh refinement
   force_central_node = .true.               ! force all nodes in the grid center to have the same values in flux surface aligned grids
   fix_axis_nodes     = .false.              ! Fix t-derivative and cross st-derivative on axis to avoid noise
@@ -825,9 +847,11 @@ subroutine preset_parameters
   spi_shard_file(:) = 'none'
   spi_plume_file(:) = 'none'
   spi_plume_hdf5  = .false.
+  spi_abl_mag_reduction  = .false.
   spi_tor_rot     = .false.
   spi_num_vol     = .true.
   using_spi       = .false.
+  spi_abl_history_old = .false.
 
   output_prad_phi = .false.
 
@@ -869,7 +893,7 @@ subroutine preset_parameters
   Sigma = 0.d0
 
 !===================== particle input values
-n_particles        = 0
+use_particles      = .false.
 nstep_particles    = 0
 nsubstep_particles = 1
 tstep_particles    = 1d-9
@@ -880,28 +904,133 @@ filter_perp_n0     = 0.d0
 filter_hyper_n0    = 1.d-10
 filter_par_n0      = 0.d0
 restart_particles  = .false.
-use_ncs            = .false.
-use_ccs            = .false.
-use_pcs            = .false.
-use_pcs_full       = .false.
-use_kn_ionisation     = .true.
-use_kn_sputtering     = .false.
-use_kn_cx             = .true.
 use_marker         = .false.
-use_kn_recombination = .true.
-use_kn_puffing       = .false.
-use_kn_line_radiation= .true.
+apply_dirichlet_proj = .false.
+init_particles_only = .false.
+find_RZ_nearby_iter = 16
+find_RZ_nearby_tol  = 1.d-22
 
-n_puff        = 0
-puff_rate     = 0.d0
-r_valve       = 0.d0
-R_valve_loc   = 0.d0
-Z_valve       = 0.d0
-R_valve_loc2  = 0.d0
-Z_valve2      = 0.d0
+!--------------- valves -------------------------
+valves(:)%type = 'none'
+valves(:)%r_valve = -1.d0
+valves(:)%R_valve_loc = -1.d0
+valves(:)%Z_valve_loc = -1.d0
+valves(:)%phi = -1.d0
+do i=1, n_valves_max
+  valves(i)%poly_R = 0.d0
+  valves(i)%poly_Z = 0.d0
+enddo
+
+! -------------- particle groups ---------------
+n_part_groups = 0
+part_groups_in_use(:) = 'non'
+proj_collection_period = 1
+
+part_group_configs(:)%Z                 = 1
+part_group_configs(:)%mass              = 0.d0
+part_group_configs(:)%coupling_scheme   = 'non'
+part_group_configs(:)%n_particles       = 0.d0
+part_group_configs(:)%type              = 'none'
+part_group_configs(:)%id                = 'non'
+part_group_configs(:)%init_function     = 'none'
+part_group_configs(:)%init_pdf          = 'none'
+part_group_configs(:)%do_conservation_checks = .false.
+
+!----- specific to ics and ncs 
+part_group_configs(:)%atom_data_suffix      = ''
+part_group_configs(:)%use_kin_puffing        = .false.
+part_group_configs(:)%use_kin_radiation      = .false.
+part_group_configs(:)%use_kin_ionisation     = .false.
+! --- ncs only
+part_group_configs(:)%use_kin_recombination  = .false.
+part_group_configs(:)%use_kin_cx             = .false.
+part_group_configs(:)%use_kin_neutral_coll   = .false.
+do i=1,n_part_groups_max
+  part_group_configs(i)%neutral_coll_dTw(:)  = -1.d99
+end do
+part_group_configs(:)%ncoll_each_nstep_part  = -9999991
+! --- ics only
+part_group_configs(:)%use_kin_bg_collisions  = .false.
+part_group_configs(:)%kin_bg_coll_type       = 'Homma2020'
+part_group_configs(:)%homma2020_alpha        = 1.5d0
+part_group_configs(:)%ics_group_idx          = -1
+
+!----- specific to rep 
+part_group_configs(:)%num_re                 = 0.d0
+part_group_configs(:)%re_energy              = 0.d0
+part_group_configs(:)%re_std_energy          = 0.d0
+part_group_configs(:)%re_pitch               = 0.d0
+
+!----- specific to epf
+part_group_configs(:)%T_maxwell              = 0.d0
+part_group_configs(:)%n_phi_planes           = 0
+part_group_configs(:)%n_particles_total      = 0.d0
+
+
+
+do i=1, n_part_groups_max
+  do j=1, n_valves_max
+    part_group_configs(i)%puff_ctrl(j)%supers_num_puff    = -1
+    part_group_configs(i)%puff_ctrl(j)%supers_weight_puff = -1.d0
+    part_group_configs(i)%puff_ctrl(j)%supers_ratio_puff  = -1.d0   
+    !< if none of these three above options are set, the supers_ratio_puff method
+    !< will be used, with its default value being set by supers_ratio_puff_default in mod_particle_puffing.f90
+    !< which overrides the default value of supers_ratio_puff set here
+    part_group_configs(i)%puff_ctrl(j)%times = -1.d0
+    part_group_configs(i)%puff_ctrl(j)%rates = -1.d0
+  enddo
+enddo
+
+do i=1, n_part_groups_max
+  do j=1, n_part_groups_max
+    part_group_configs(i)%wall_act_configs(j)%type            = "none"
+    part_group_configs(i)%wall_act_configs(j)%target_group_id = "non"
+    part_group_configs(i)%wall_act_configs(j)%weight_factor   = 1.d0
+    part_group_configs(i)%wall_act_configs(j)%only_in_polygon = .false.
+    part_group_configs(i)%wall_act_configs(j)%poly_R          = -1.d99
+    part_group_configs(i)%wall_act_configs(j)%poly_Z          = -1.d99
+    write(tmp,"(I5)") j
+    write(part_group_configs(i)%wall_act_configs(j)%nametag,"(A)") adjustl(trim(tmp)) ! sets the default nametag to the wall_act_configs(j) number j
+
+    part_group_configs(i)%wall_act_configs(j)%supers_num_wall    = -1
+    part_group_configs(i)%wall_act_configs(j)%supers_weight_wall = -1.d0
+    part_group_configs(i)%wall_act_configs(j)%supers_ratio_wall  = -1.d0   
+    !< if none of these three above options are set, the supers_ratio_wall method
+    !< will be used, with its default value being set by supers_ratio_wall_default in mod_particle_wall_interaction.f90
+  enddo
+  part_group_configs(i)%wall_act_each_nstep_part = -9999991
+enddo
+
+part_kill_ratio = 1.d-3
+
+! --- fluid groups
+n_fluid_groups = 0
+
+fluid_configs(:)%Z = -999
+fluid_configs(:)%density_fraction = -1.d99
+fluid_configs(1)%density_fraction = 1.d0 !< the first one should have default 1, if more then one fluid is used, the user should specify the distribution
+
+do i=1, n_fluid_groups_max
+  do j=1, n_part_groups_max
+    fluid_configs(i)%wall_act_configs(j)%type            = "none"
+    fluid_configs(i)%wall_act_configs(j)%target_group_id = "non"
+    fluid_configs(i)%wall_act_configs(j)%weight_factor   = 1.d0
+    fluid_configs(i)%wall_act_configs(j)%only_in_polygon = .false.
+    fluid_configs(i)%wall_act_configs(j)%poly_R          = -1.d99
+    fluid_configs(i)%wall_act_configs(j)%poly_Z          = -1.d99
+    write(tmp,"(I5)") j
+    write(fluid_configs(i)%wall_act_configs(j)%nametag,"(A)") adjustl(trim(tmp))
+
+    fluid_configs(i)%wall_act_configs(j)%supers_num_wall    = -1
+    fluid_configs(i)%wall_act_configs(j)%supers_weight_wall = -1.d0
+    fluid_configs(i)%wall_act_configs(j)%supers_ratio_wall  = -1.d0
+  enddo
+enddo
+!-----------------------------------------------
 
 use_manual_random_seed = .false.
 manual_seed = 498932990          !< chosen arbitarily
-
+use_fixed_rng_value = .false.
+fixed_rng_value = 0.5
 
 end subroutine preset_parameters

@@ -5,7 +5,7 @@ implicit none
 contains
 
 !> Initialize solvers, parameters, MPI, threads etc.
-subroutine initialise(my_id, n_cpu, skip_help)
+subroutine initialise(my_id, n_mpi, skip_help)
   use tr_module, only: tr_meminit
   use mod_clock, only: clck_init
   use data_structure, only: init_threads
@@ -23,7 +23,7 @@ subroutine initialise(my_id, n_cpu, skip_help)
 
 #include "r3_info.h"
 ! Necessary for dependency reasons... should clean that up a bit and create a module
-  integer, intent(out) :: my_id, n_cpu
+  integer, intent(out) :: my_id, n_mpi
   logical, optional, intent(in) :: skip_help
   integer :: ierr
   integer :: required, provided
@@ -50,14 +50,14 @@ subroutine initialise(my_id, n_cpu, skip_help)
   call init_threads()
   
   ! --- Determine number of MPI procs, ID of this proc
-  call MPI_COMM_SIZE(MPI_COMM_WORLD, n_cpu, ierr)
+  call MPI_COMM_SIZE(MPI_COMM_WORLD, n_mpi, ierr)
   call MPI_COMM_RANK(MPI_COMM_WORLD, my_id, ierr)
   
   ! --- Process command line arguments
   if (present(skip_help)) then
-    if ( my_id == 0 .and. .not. skip_help) call jorek2help(n_cpu, nbthreads)
+    if ( my_id == 0 .and. .not. skip_help) call jorek2help(n_mpi, nbthreads)
   else
-    if ( my_id == 0) call jorek2help(n_cpu, nbthreads)
+    if ( my_id == 0) call jorek2help(n_mpi, nbthreads)
   end if
   
   call MPI_Barrier(MPI_COMM_WORLD,ierr)
@@ -66,7 +66,7 @@ subroutine initialise(my_id, n_cpu, skip_help)
   call MPI_Barrier(MPI_COMM_WORLD,ierr)
 
   ! --- Initialise memory tracing
-  call tr_meminit(my_id, n_cpu)
+  call tr_meminit(my_id, n_mpi)
 
   ! --- Initialise timing
   call clck_init()
@@ -107,80 +107,133 @@ subroutine initialise(my_id, n_cpu, skip_help)
 end subroutine initialise
 
 
+!> Ensure that the prescribed density is compatible with a model that does not evolve density.
+subroutine check_flat_density_profile(my_id)
+  use phys_module, only: LOWER_XPOINT
+
+  integer, intent(in) :: my_id
+  integer, parameter :: n_profile_points = 201
+  real*8, parameter :: tolerance = 1.d-5
+
+  integer :: i, ierr
+  real*8 :: density_profile, derivatives(8), psi_n
+  real*8 :: max_deviation, psi_n_max_deviation
+
+  max_deviation = 0.d0
+  psi_n_max_deviation = 0.d0
+
+  do i = 1, n_profile_points
+    psi_n = 1.5d0 * dble(i-1) / dble(n_profile_points-1)
+    call density(.false., LOWER_XPOINT, 0.d0, (/0.d0, 0.d0/), psi_n, 0.d0, 1.d0, density_profile, &
+                 derivatives(1), derivatives(2), derivatives(3), derivatives(4), &
+                 derivatives(5), derivatives(6), derivatives(7), derivatives(8))
+
+    if (abs(density_profile - 1.d0) .gt. max_deviation) then
+      max_deviation = abs(density_profile - 1.d0)
+      psi_n_max_deviation = psi_n
+    endif
+  enddo
+
+  if (max_deviation .le. tolerance) return
+
+  if (my_id .eq. 0) then
+    write(*,*) 'ERROR:'
+    write(*,*) '  with_rho = .false. requires density() to return a flat profile of 1.'
+    write(*,*) '  Maximum deviation from 1: ', max_deviation
+    write(*,*) '  At normalized flux coordinate: ', psi_n_max_deviation
+  endif
+  call MPI_FINALIZE(ierr)
+  stop
+end subroutine check_flat_density_profile
+
+
 
 !> Verify that we are not doing stupid things. Run this after loading parameters
 !> from the input file.
-subroutine sanity_checks(my_id, n_cpu, mpi_required, mpi_provided)
+subroutine sanity_checks(my_id, n_mpi, mpi_required, mpi_provided)
   use mod_parameters, only: n_tor, n_plane
   use phys_module
   use gauss
 
   integer :: ierr, i
-  integer, intent(in) :: my_id, n_cpu
+  integer, intent(in) :: my_id, n_mpi
   integer :: nsolvers=0
   logical :: solvers(4), solvers_eq(3)
   integer :: mpi_required, mpi_provided
 
+  ! Check for a non-flat density profile when density is not evolved
+  if (.not. with_rho) call check_flat_density_profile(my_id)
+
   ! WARNING for axis treatment
   if(treat_axis .and. (fix_axis_nodes .or. force_central_node))then
-    write(*,*) 'WARNING :'
-    write(*,*) 'If using treat_axis = .true. then'
-    write(*,*) 'fix_axis_nodes and force_central_node both MUST be .false.'
-    write(*,*) 'Setting fix_axis_nodes and force_central_node to .false.'    
+    if (my_id .eq. 0) then
+      write(*,*) 'WARNING:'
+      write(*,*) '  If using treat_axis = .true. then'
+      write(*,*) '  fix_axis_nodes and force_central_node both MUST be .false.'
+      write(*,*) '  Setting fix_axis_nodes and force_central_node to .false.'
+    endif
     force_central_node  = .false.
     fix_axis_nodes      = .false.
   endif
   if(treat_axis .and. (n_order .gt. 3))then
-    write(*,*) 'WARNING :'
-    write(*,*) 'treat_axis = .true. is not possible'
-    write(*,*) 'at the moment with n_order>3, please use fix_axis_nodes instead.'
+    if (my_id .eq. 0) then
+      write(*,*) 'WARNING:'
+      write(*,*) '  treat_axis = .true. is not possible'
+      write(*,*) '  at the moment with n_order>3, please use fix_axis_nodes instead.'
+    endif
     call MPI_FINALIZE(IERR) 
     stop
   endif
 
   ! WARNING for freeboundary with n_order>3
   if(freeboundary .and. (n_order .gt. 3))then
-    write(*,*) 'WARNING :'
-    write(*,*) 'freeboundary = .true. is not possible'
-    write(*,*) 'at the moment with n_order>3, aborting.'
+    if (my_id .eq. 0) then
+      write(*,*) 'WARNING:'
+      write(*,*) '  freeboundary = .true. is not possible'
+      write(*,*) '  at the moment with n_order>3, aborting.'
+    endif
     call MPI_FINALIZE(IERR) 
     stop
   endif
 
   ! WARNING for invalid values of n_order (needs to be odd)
   if( mod(n_order+1,2) .ne. 0 )then
-    write(*,*) 'WARNING :'
-    write(*,*) 'n_order needs to be an odd integer'
+    if (my_id .eq. 0) then
+      write(*,*) 'WARNING:'
+      write(*,*) '  n_order needs to be an odd integer'
+    endif
     call MPI_FINALIZE(IERR) 
     stop
   endif
 
   ! WARNING for n_order>=7 if auto-generated mod_basisfunctions.f90 and gauss.f90 have not been created
   if( (n_order .ge. 7) .and. (n_gauss .le. 8) )then
-    write(*,*) 'WARNING :'
-    write(*,*) 'if you are using n_order>=7 (ie. G3-Bezier or higher)'
-    write(*,*) 'you need to generate the routines mod_basisfunctions.f90 and gauss.f90'
-    write(*,*) 'using the code ./util/generate_codes_for_norder_gt_7.py'
-    write(*,*) 'please see'
-    write(*,*) 'https://www.jorek.eu/wiki/doku.php?id=gn_grid_tutorial#gn-continuous_grid_tutorial'
-    write(*,*) 'for instructions.'
+    if (my_id .eq. 0) then
+      write(*,*) 'WARNING:'
+      write(*,*) '  if you are using n_order>=7 (ie. G3-Bezier or higher)'
+      write(*,*) '  you need to generate the routines mod_basisfunctions.f90 and gauss.f90'
+      write(*,*) '  using the code ./util/generate_codes_for_norder_gt_7.py'
+      write(*,*) '  please see'
+      write(*,*) '  https://www.jorek.eu/wiki/doku.php?id=gn_grid_tutorial#gn-continuous_grid_tutorial'
+      write(*,*) '  for instructions.'
+    endif
     call MPI_FINALIZE(IERR) 
     stop
   endif
 
 #if (!defined(USE_PASTIX))&&(!defined(USE_PASTIX6))
-  if (use_pastix.or.use_pastix_eq) then
-    write(*,*) ' FATAL : use_pastix requires defined USE_PASTIX or USE_PASTIX6'
-    call MPI_Abort(MPI_COMM_WORLD, 3, ierr)
-    stop
-  endif
+  if (use_pastix .or. use_pastix_eq .or. (use_particles .and. use_pastix_prj)) then
+     write(*,*) ' FATAL : use_pastix/use_pastix_eq/use_pastix_prj requires defined USE_PASTIX or USE_PASTIX6'
+     call MPI_Abort(MPI_COMM_WORLD, 3, ierr)
+     stop
+  end if
 #endif
 
 #ifndef USE_MUMPS
-  if (use_mumps.or.use_mumps_eq) then
-    write(*,*) ' FATAL : use_mumps requires defined USE_MUMPS'
-    call MPI_Abort(MPI_COMM_WORLD, 3, ierr)
-    stop
+  if (use_mumps.or.use_mumps_eq .or. (use_particles .and. use_mumps_prj)) then
+     write(*,*) ' FATAL : use_mumps/use_mumps_eq/use_mumps_prj requires defined USE_MUMPS'
+     call MPI_Abort(MPI_COMM_WORLD, 3, ierr)
+     stop
   endif
 #endif
 
@@ -193,11 +246,11 @@ subroutine sanity_checks(my_id, n_cpu, mpi_required, mpi_provided)
 #endif
 
 #ifndef USE_STRUMPACK
-  if (use_strumpack.or.use_strumpack_eq) then
-    write(*,*) ' FATAL : use_strumpack requires defined USE_STRUMPACK'
+  if ( use_strumpack .or. use_strumpack_eq .or. (use_particles .and. use_strumpack_prj)) then
+     write(*,*) ' FATAL : use_strumpack/use_strumpack_eq/use_strumpack_prj requires defined USE_STRUMPACK'
     call MPI_Abort(MPI_COMM_WORLD, 3, ierr)
     stop
-  endif
+ endif
 #endif
   
   ! --- Check solver consistency
@@ -302,62 +355,69 @@ subroutine sanity_checks(my_id, n_cpu, mpi_required, mpi_provided)
       stop
     end if
   end if
-  if ( iand(n_plane,n_plane-1) /= 0 ) then
+  if ( (iand(n_plane,n_plane-1) /= 0)  .and. (my_id .eq. 0)) then
     write(*,*) 'WARNING: n_plane is not a power of two. This might be inefficient.'
     write(*,*) '  When using FFTW, it is possible to run like this, but it might not be fast.'
   end if
-  if ( (nbthreads > 24) .and. (my_id == 0) ) then
+  if ( (nbthreads > 24) .and. (my_id == 0)  .and. (my_id .eq. 0)) then
     write(*,*) 'WARNING: You are using more than 24 OpenMP threads which might be inefficient.'
     write(*,*) '  Consider testing, whether you get better performance by increasing the number'
     write(*,*) '  of MPI tasks and reducing the number of OpenMP threads in the jobscript.'
   end if
-  if ( ( tauIC .ne. 0.d0 ) .and. ( jorek_model == 401 ) ) then
+  if ( ( tauIC .ne. 0.d0 ) .and. ( jorek_model == 401 )  .and. (my_id .eq. 0)) then
     write(*,*) 'WARNING: tauIC in model401 has been modified to match model303. '
     write(*,*) '         tauIC should be = m_{ion} / ( e * F0 * sqrt_mu0_rho0 * (1. + T_i/T_e) )'
   endif
-  if (abs(visco_par-visco_par_heating)/(visco_par+visco_par_heating+1.d-12) > 1.d-6) then
-    write(*,*) 'WARNING: The viscosity visco_par and the viscosity used for viscous heating '
-    write(*,*) '  visco_par_heating are not the same. No problem if you know what you are doing,  ' 
+  if ((abs(visco_par-visco_par_heating)/(visco_par+visco_par_heating+1.d-12) > 1.d-6) .and. (my_id .eq. 0)) then
+    write(*,*) 'WARNING: The viscosity visco_par and the viscosity used for viscous heating'
+    write(*,*) '  visco_par_heating are not the same. No problem if you know what you`re doing,' 
     write(*,*) '  but with this setup you are not conserving energy.   '
   endif
-  if (abs(visco-visco_heating)/(visco+visco_heating+1.d-12) > 1.d-6) then
+  if ((abs(visco-visco_heating)/(visco+visco_heating+1.d-12) > 1.d-6) .and. (my_id .eq. 0)) then
     write(*,*) 'WARNING: The viscosity visco and the viscosity used for viscous heating '
-    write(*,*) '  visco_heating are not the same. No problem if you know what you are doing,  ' 
+    write(*,*) '  visco_heating are not the same. No problem if you know what you`re doing,' 
     write(*,*) '  but with this setup you are not conserving energy.   '
   endif
 
-  if (abs(eta-eta_ohmic)/(eta+eta_ohmic+1.d-12) > 1.d-6) then
+  if ((abs(eta-eta_ohmic)/(eta+eta_ohmic+1.d-12) > 1.d-6) .and. (my_id .eq. 0)) then
     write(*,*) 'WARNING: The resistivity eta and the resistivity used for Ohmic heating '
     write(*,*) '  eta_ohm are not the same. No problem if you know what you are doing,  ' 
     write(*,*) '  but with this setup you are not conserving energy.   '
   endif
-  if (abs(T_max_eta-T_max_eta_ohm)/(T_max_eta+T_max_eta_ohm) > 1.d-6) then
-    write(*,*) 'WARNING: T_max_eta and T_max_eta_ohm are not the same, which breaks  &
-        energy conservation. No problem if you know what you are doing (a good reason to &
-	do this could be to avoid spurious Ohmic heating in the plasma core).'
+  if ((abs(T_max_eta-T_max_eta_ohm)/(T_max_eta+T_max_eta_ohm) > 1.d-6) .and. (my_id .eq. 0)) then
+    write(*,*) 'WARNING: T_max_eta and T_max_eta_ohm are not the same, which breaks energy'
+    write(*,*) '  conservation. No problem if you know what you are doing (a good reason  '
+    write(*,*) '  to do this could be to avoid spurious Ohmic heating in the plasma core).'
   end if
-  if ((T_min_neg .lt. 0.d0) .or. (rho_min_neg .lt. 0.d0)) then
-	write(*,*) 'WARNING: You did not specify T_min_neg and/or rho_min_neg for the correction of negative temperatures and densities.  & 
-	   The lower values of the equilibrium profiles (T_1 and/or rho_1) will be used instead.'
-	write(*,*) 'For instance, try in your input file: rho_min_neg = 1.d-3 and T_min_neg = 4.02d-4 !=2.01d-5*central_density*Tmin_ev (with central_density = 1 and Tmin_eV= 20 eV)'    
+  if (((T_min_neg .lt. 0.d0) .or. (rho_min_neg .lt. 0.d0)) .and. (my_id .eq. 0)) then
+    write(*,*) 'WARNING: You did not specify T_min_neg and/or rho_min_neg for the correction' 
+    write(*,*) '  of negative temperatures and densities. The lower values of the equilibrium'
+    write(*,*) '  profiles (T_1 and/or rho_1) will be used instead.'
+    write(*,*) '  For instance, try in your input file: rho_min_neg = 1.d-3' 
+    write(*,*) '  and T_min_neg = 4.02d-4 !=2.01d-5*central_density*Tmin_ev' 
+    write(*,*) '  (with central_density = 1 and Tmin_eV= 20 eV)' 
   endif
 #ifdef WITH_Impurities
-  if (D_prof_imp_neg_thresh .gt. -1.d3) then
-	write(*,*) 'WARNING: You are using a value for D_prof_imp_neg_thresh that is likely to activate the correction for negative impurity density.' 
-	write(*,*) '  No problem if you know what you are doing, but this could lead to convergence issues'
-	write(*,*) '  in particular at the beginning of impurity injection when nimp is oscillating around zero.'
+  if ((D_prof_imp_neg_thresh .gt. -1.d3) .and. (my_id .eq. 0)) then
+    write(*,*) 'WARNING: You are using a value for D_prof_imp_neg_thresh that is likely to activate the correction for negative impurity density.' 
+    write(*,*) '  No problem if you know what you are doing, but this could lead to convergence issues'
+    write(*,*) '  in particular at the beginning of impurity injection when nimp is oscillating around zero.'
   endif
 #endif
 
 #ifndef USE_BLOCK
-  write(*,*) 'WARNING: You are not using USE_BLOCK=1 which might be inefficient.'
-  write(*,*) '  Consider setting USE_BLOCK=1 in your Makefile.inc'
+  if (my_id .eq. 0) then
+    write(*,*) 'WARNING: You are not using USE_BLOCK=1 which might be inefficient.'
+    write(*,*) '  Consider setting USE_BLOCK=1 in your Makefile.inc'
+  endif
 #endif
 #ifndef USE_FFTW
-  write(*,*) 'WARNING: You are not using USE_FFTW=1 which might be inefficient.'
-  write(*,*) '  Consider setting USE_FFTW=1 in your Makefile.inc'
+  if (my_id .eq. 0) then
+    write(*,*) 'WARNING: You are not using USE_FFTW=1 which might be inefficient.'
+    write(*,*) '  Consider setting USE_FFTW=1 in your Makefile.inc'
+  endif
 #endif
-  if (use_pastix .and. use_BLR_compression) then
+  if (use_pastix .and. use_BLR_compression .and. (my_id .eq. 0) ) then
     write(*,*) 'WARNING: PaStiX versions before 6.x do not support BLR compression.'
     write(*,*) '  No compression will be used in this run.'
   endif

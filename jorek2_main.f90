@@ -132,7 +132,7 @@ program JOREK2
   integer                  :: my_id
   integer                  :: istep,jstep,ierr,i,itor,inode, i_elm_axis, i_elm_xpoint(2)
   integer                  :: n_local_ELMs
-  integer                  :: n_cpu
+  integer                  :: n_mpi
   character*8              :: label, itlabel
   character*14             :: fileout
   integer                  :: mpi_required,mpi_provided,StatInfo
@@ -187,7 +187,7 @@ program JOREK2
   res = 0.d0   
     
   !***********************************************************************
-  !*                  intialisation                                      *
+  !*                  initialisation                                      *
   !***********************************************************************
 
   ! --- Initialize OpenMP threads before MPI_init
@@ -208,14 +208,14 @@ mpi_required = 0
   
   ! --- Determine number of MPI procs
   call MPI_COMM_SIZE(MPI_COMM_WORLD, comm_size, ierr)
-  n_cpu = comm_size
+  n_mpi = comm_size
   
   ! --- Determine ID of each MPI proc
   call MPI_COMM_RANK(MPI_COMM_WORLD, rank, ierr)
   my_id = rank
   
   ! --- Process command line arguments
-  if ( my_id == 0 ) call jorek2help(n_cpu, nbthreads)
+  if ( my_id == 0 ) call jorek2help(n_mpi, nbthreads)
   
   call MPI_Barrier(MPI_COMM_WORLD,ierr)
   CALL MPI_GET_PROCESSOR_NAME (name,resultlength,ierr)
@@ -223,7 +223,7 @@ mpi_required = 0
   call MPI_Barrier(MPI_COMM_WORLD,ierr)
 
   ! --- Initialise memory tracing
-  call tr_meminit(my_id, n_cpu)
+  call tr_meminit(my_id, n_mpi)
 
   ! --- Initialise timing
   call clck_init()
@@ -242,7 +242,7 @@ mpi_required = 0
   call set_trap_sigterm()
   
   ! --- Preset input parameters to reasonable defaults, then read the input file.
-  call initialise_and_broadcast_parameters(my_id, "__NO_FILENAME__")
+  call initialise_and_broadcast_parameters(my_id, "__NO_FILENAME__", .false.)
   
   ! --- Initialize the vacuum part.
   call vacuum_init(my_id, freeboundary_equil, freeboundary, resistive_wall)
@@ -280,7 +280,7 @@ mpi_required = 0
  
   call MPI_Barrier(MPI_COMM_WORLD,ierr)
   
-  call sanity_checks(my_id, n_cpu, mpi_required, mpi_provided)
+  call sanity_checks(my_id, n_mpi, mpi_required, mpi_provided)
 
   call tr_print_memsize("InitStep")
 
@@ -307,7 +307,8 @@ mpi_required = 0
       write(*,*) 'WARNING: Axis treatments set via input file is not the same as that in the restart file.'
       write(*,*) 'You are trying to restart the simulation with treat_axis = ', input_treat_axis
       write(*,*) 'Earlier treat_axis was set to = ', treat_axis
-      write(*,*) 'STOP' 
+      write(*,*) 'STOP'
+      call MPI_Abort(MPI_COMM_WORLD, 29, IERR)
       stop      
     endif
 
@@ -336,7 +337,7 @@ mpi_required = 0
             call grid_double_xpoint(node_list, element_list)
           endif
         else
-	  call grid_xpoint(node_list,element_list,n_flux,n_open,n_private,n_leg,n_tht,  &
+	  call grid_xpoint(node_list,element_list,n_flux,n_open,n_private,n_leg,n_tht,xr_closed,  &
                            SIG_open,SIG_closed,SIG_private,SIG_theta,SIG_leg_0,SIG_leg_1,dPSI_open,dPSI_private, xcase)
         endif
       else
@@ -346,7 +347,7 @@ mpi_required = 0
 
     end if
 
-    if ( freeboundary .and. freeb_change_indices) call exchange_indices(node_list, my_id, n_cpu, .false.)
+    if ( freeboundary .and. freeb_change_indices) call exchange_indices(node_list, my_id, n_mpi, .false.)
     
  end if !   if ( restart .and. (my_id == 0) ) then
 
@@ -373,13 +374,20 @@ mpi_required = 0
     call init_node_list(node_list, n_nodes_max, node_list%n_dof, n_var)
 
 #if JOREK_MODEL == 180
-    call initialise_equilibrium(my_id,node_list,element_list,bnd_node_list, bnd_elm_list)
+    call initialise_equilibrium(my_id,node_list,element_list,bnd_node_list, bnd_elm_list, ierr)
+    if (ierr == 3) then
+      write(fileout,rst_file_ind_fmt(1)) 'jorek',0
+      call export_restart(node_list, element_list, fileout)
+      write(*,*) 'Restart file created, aborting.'
+      call MPI_Abort(MPI_COMM_WORLD, 3, ierr)
+      stop
+    end if
 #else
     if_not_regrid_from_rz: if(.not. regrid_from_rz) then
       
       ! --- allocate values of nodes
 
-      call initial_grid(node_list, element_list, bnd_node_list, bnd_elm_list, my_id, n_cpu)
+      call initial_grid(node_list, element_list, bnd_node_list, bnd_elm_list, my_id, n_mpi)
 
       ! --- Synchronizing MPI processes avoid deadlock issues on some machine
       call MPI_Barrier(MPI_COMM_WORLD,ierr)
@@ -430,7 +438,7 @@ mpi_required = 0
     ! --- Determine a flux surface aligned grid and re-calculate the equilibrium on it
     if (n_flux > 1) then
 
-      call flux_grid(node_list, element_list, bnd_node_list, bnd_elm_list, my_id, n_cpu)
+      call flux_grid(node_list, element_list, bnd_node_list, bnd_elm_list, my_id, n_mpi)
             
       if ( freeb_equil2) then
         freeboundary_equil = .true.
@@ -498,7 +506,6 @@ if ( freeboundary ) then
   call update_response(my_id,tstep,  resistive_wall)
   call import_external_fields('coil_field.dat', my_id)
   call set_coil_curr_time_trace()
-  call read_Z_axis_profile() 
   if ( (.not. restart) .or. (.not. wall_curr_initialized) ) call init_wall_currents(my_id, resistive_wall)
 end if
   
@@ -537,10 +544,13 @@ write(*,*) "n elements:", element_list%n_elements
   ! --- from the previous time-step, which is only read by my_id=0 from the restart file
   call broadcast_equil_state(my_id)                           ! equil_state
 
-  if ( freeboundary ) call broadcast_vacuum(my_id, resistive_wall)
+  if ( freeboundary ) then
+     call broadcast_vacuum(my_id, resistive_wall)
+     call read_Z_axis_profile()
+  end if
 
   mhd_sim%my_id = my_id
-  mhd_sim%n_cpu = n_cpu
+  mhd_sim%n_mpi = n_mpi
   mhd_sim%n_tor = n_tor
   mhd_sim%freeboundary = freeboundary
   mhd_sim%restart = restart
@@ -584,20 +594,20 @@ write(*,*) "n elements:", element_list%n_elements
   if (nstep > 0) then
 
     !***********************************************************************
-    !*  	  distribute nodes and elements over cpu's		   *
+    !*  	  distribute nodes and elements over mpi's		   *
     !***********************************************************************
-    index_size  = n_cpu
+    index_size  = n_mpi
     id_elements = my_id
 
     call tr_allocatep(local_elms,1,element_list%n_elements,"local_elms",CAT_FEM)
     
     a_mat%comm = MPI_COMM_WORLD
-    a_mat%ncpu = n_cpu
+    a_mat%nmpi = n_mpi
     
     mhd_sim%local_elms    => local_elms
     mhd_sim%sr_n_tor      = sr%n_tor
     
-    call distribute_nodes_elements(id_elements, n_cpu, index_size, mhd_sim%node_list, mhd_sim%element_list, .false., mhd_sim%local_elms, & 
+    call distribute_nodes_elements(id_elements, n_mpi, index_size, mhd_sim%node_list, mhd_sim%element_list, .false., mhd_sim%local_elms, & 
                                    mhd_sim%n_local_elms, restart, freeboundary, a_mat)    
     
     call global_matrix_structure(mhd_sim%node_list, mhd_sim%element_list, mhd_sim%bnd_elm_list, freeboundary,&
@@ -619,10 +629,10 @@ write(*,*) "n elements:", element_list%n_elements
   
   ! --- Export a restart file before the first timestep
   if ( (my_id == 0) .and. (.not. restart) ) then
-    if ( freeboundary .and. freeb_change_indices ) call exchange_indices(node_list, my_id, n_cpu, .true.)
-    fileout = 'jorek00000'
+    if ( freeboundary .and. freeb_change_indices ) call exchange_indices(node_list, my_id, n_mpi, .true.)
+    write(fileout,rst_file_ind_fmt(1)) 'jorek',0
     call export_restart(node_list, element_list, fileout)
-    if ( freeboundary .and. freeb_change_indices ) call exchange_indices(node_list, my_id, n_cpu, .false.)
+    if ( freeboundary .and. freeb_change_indices ) call exchange_indices(node_list, my_id, n_mpi, .false.)
   end if
   
   if ( ( my_id == 0 ) .and. ( (node_list%n_nodes > n_nodes_max+1000)                               &
@@ -719,7 +729,7 @@ write(*,*) "n elements:", element_list%n_elements
     call construct_matrix(mhd_sim, mhd_sim%local_elms, mhd_sim%n_local_elms, a_mat, rhs_vec, harmonic_matrix=.false.)
   
     call clck_time_barrier(t1); call clck_ldiff(t0,t1,tsecond)
-    if (my_id.eq.0) write(*,FMT_TIMING) my_id, '# Elapsed time in construct global matrix :',tsecond
+    if (my_id.eq.0) write(*,FMT_TIMING) my_id, '# Elapsed time construct global matrix: ',tsecond
       
     solver%tstep = tstep
     solver%istep = istep
@@ -843,7 +853,7 @@ write(*,*) "n elements:", element_list%n_elements
 #endif
 
        ! --- Output some information about the current timestep
-       130 format(1x,a,i5.5,a,es10.3,a)
+       130 format(1x,a,i6.6,a,es10.3,a)
        131 format(1x,a,2(2(es10.2,' ...',es10.2,',')))
        132 format(1x,'-------------------------------------------------------------------')
        133 format(1x,a,2(es10.2,' at ',i10,','))
@@ -911,10 +921,10 @@ write(*,*) "n elements:", element_list%n_elements
     
     ! --- Write a restart file every nout timesteps
     if ( (my_id == 0) .and. (mod(index_now,nout) == 0) ) then
-      if ( freeboundary .and. freeb_change_indices ) call exchange_indices(mhd_sim%node_list, my_id, n_cpu, .true.)
-      write(fileout,'(A5,i5.5)') 'jorek',index_now
+      if ( freeboundary .and. freeb_change_indices ) call exchange_indices(mhd_sim%node_list, my_id, n_mpi, .true.)
+      write(fileout,rst_file_ind_fmt(1)) 'jorek',index_now
       call export_restart(mhd_sim%node_list, mhd_sim%element_list, fileout)
-      if ( freeboundary .and. freeb_change_indices ) call exchange_indices(mhd_sim%node_list, my_id, n_cpu, .false.)
+      if ( freeboundary .and. freeb_change_indices ) call exchange_indices(mhd_sim%node_list, my_id, n_mpi, .false.)
     endif
     
     ! --- Exit the code if a file "STOP_NOW" exists in the run directory.
@@ -999,10 +1009,10 @@ write(*,*) "n elements:", element_list%n_elements
   !***********************************************************************
 
   if (my_id .eq. 0)  then
-    if ( freeboundary .and. freeb_change_indices ) call exchange_indices(mhd_sim%node_list, my_id, n_cpu, .true.)
+    if ( freeboundary .and. freeb_change_indices ) call exchange_indices(mhd_sim%node_list, my_id, n_mpi, .true.)
     fileout = 'jorek_restart'
     call export_restart(mhd_sim%node_list, mhd_sim%element_list, fileout)
-    if ( freeboundary .and. freeb_change_indices ) call exchange_indices(mhd_sim%node_list, my_id, n_cpu, .false.)
+    if ( freeboundary .and. freeb_change_indices ) call exchange_indices(mhd_sim%node_list, my_id, n_mpi, .false.)
     if ( write_ps ) then
       if (.not. bench_without_plot) then
         do ivar=1,n_var
