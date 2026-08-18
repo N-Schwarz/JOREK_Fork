@@ -183,12 +183,16 @@ module vacuum
   end type t_Z_axis_ref_ts
   real*8                        :: start_VFB_ts                  !< start time of active VFB during simulation ([JOREK units])
   real*8                        :: vert_FB_amp_ts(MAX_COILS)     !< Amplitude and sign of vert feedback for each coil ([[jorek-starwall-faqs|eq_FAQs]])
+  real*8                        :: rad_FB_amp_ts(MAX_COILS)      !< Amplitude and sign of vert feedback for each coil ([[jorek-starwall-faqs|eq_FAQs]])
   real*8                        :: I_coils_max(MAX_COILS)        !< Current limit of each coil ([Ampere])
   real*8                        :: vert_FB_gain(3)               !< Gain parameters for vertical feedback controller
+  real*8                        :: rad_FB_gain(3)                !< Gain parameters for vertical feedback controller
   real*8                        :: vert_FB_tact                  !< Time interval between two controller actions ([JOREK units])
   real*8                        :: dZ_axis_integral              !< Integrated values of Z_axis-Z_reference for controller
+  real*8                        :: dR_axis_integral              !< Integrated values of Z_axis-Z_reference for controller
   real*8, allocatable           :: vert_FB_response(:,:)         !< Controller response (PID gain * err) and target axis
   type(t_Z_axis_ref_ts), target :: Z_axis_ref_ts                 !< Time trace of axis target position
+  type(t_Z_axis_ref_ts), target :: R_axis_ref_ts                 !< Time trace of axis target position
   
   
   
@@ -365,32 +369,59 @@ module vacuum
   
   !> Read the prescribed time evolution profile of Z_axis from a file, if prsent. Otherwise use
   !! either the input value Z_axis_ref or the equilibrium value
-  subroutine read_Z_axis_profile()
+  subroutine read_axis_profile(my_id)
 
     use profiles, only: readProf
     use equil_info, only: ES
-    if (vert_pos_file /= 'none') then
-      call readProf(Z_axis_ref_ts%time, Z_axis_ref_ts%position, Z_axis_ref_ts%len, vert_pos_file)
-    else
-      if (Z_axis_ref > 1.d10) Z_axis_ref = ES%Z_axis
+    use mpi_mod
+    integer :: my_id,err
 
-      if (allocated(Z_axis_ref_ts%time))     deallocate(Z_axis_ref_ts%time)
-      if (allocated(Z_axis_ref_ts%position)) deallocate(Z_axis_ref_ts%position)
-      allocate(Z_axis_ref_ts%time    (2))
-      allocate(Z_axis_ref_ts%position(2))
-      Z_axis_ref_ts%len          =  2
-      Z_axis_ref_ts%time     (1) = -1.d12
-      Z_axis_ref_ts%time     (2) =  1.d12
-      Z_axis_ref_ts%position (1) =  Z_axis_ref 
-      Z_axis_ref_ts%position (2) =  Z_axis_ref
-    endif
-    call check_Z_axis_profile() 
-  end subroutine read_Z_axis_profile
+    if (my_id .eq. 0) then
+      if (vert_pos_file /= 'none') then
+        call readProf(Z_axis_ref_ts%time, Z_axis_ref_ts%position, Z_axis_ref_ts%len, vert_pos_file)
+      else
+        if (Z_axis_ref > 1.d10) Z_axis_ref = ES%Z_axis
+        if (R_axis_ref < 0) R_axis_ref = ES%R_axis
+        if (allocated(Z_axis_ref_ts%time))     deallocate(Z_axis_ref_ts%time)
+        if (allocated(Z_axis_ref_ts%position)) deallocate(Z_axis_ref_ts%position)
+        allocate(Z_axis_ref_ts%time    (2))
+        allocate(Z_axis_ref_ts%position(2))
+        Z_axis_ref_ts%len          =  2
+        Z_axis_ref_ts%time     (1) = -1.d12
+        Z_axis_ref_ts%time     (2) =  1.d12
+        Z_axis_ref_ts%position (1:2) =  Z_axis_ref 
+
+
+        if (allocated(R_axis_ref_ts%time))     deallocate(R_axis_ref_ts%time)
+        if (allocated(R_axis_ref_ts%position)) deallocate(R_axis_ref_ts%position)
+        allocate(R_axis_ref_ts%time    (2))
+        allocate(R_axis_ref_ts%position(2))
+        R_axis_ref_ts%len          =  2
+        R_axis_ref_ts%time     (1) = -1.d12
+        R_axis_ref_ts%time     (2) =  1.d12
+        R_axis_ref_ts%position (1:2) =  R_axis_ref 
+
+      endif
+    end if
+    call MPI_bcast(Z_axis_ref,     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(R_axis_ref,     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(Z_axis_ref_ts%len,                     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(Z_axis_ref_ts%time,    Z_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(Z_axis_ref_ts%position,Z_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(R_axis_ref_ts%len,                     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(R_axis_ref_ts%time,    R_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(R_axis_ref_ts%position,R_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+
+
+    call check_axis_profile() 
+  end subroutine read_axis_profile
   
   
   
   !> Basic checks that the prescribed Z_axis profile provided makes sense
-  subroutine check_Z_axis_profile()
+  subroutine check_axis_profile()
+    use phys_module, only: t_now
+
     if (sum(abs(vert_FB_amp_ts(1:n_pf_coils)))>1.d-6) then
       if  (maxval(abs(Z_axis_ref_ts%position(:))) > 1.d10) then
         write(*,*) 'ERROR: target Z_axis beyond Machine limits'
@@ -398,15 +429,33 @@ module vacuum
       else if (minval(I_coils_max(1:n_coils)) .lt. 0) then
         write(*,*) 'ERROR: The maximum value of the coil cannot be smaller than 0.'
         stop
-      else if (Z_axis_ref_ts%time(1)>0.d0) then        
-        write(*,*) 'ERROR: The Z_axis time trace does not start at time 0. Check your input file'
+      else if (Z_axis_ref_ts%time(1)>t_now) then        
+        write(*,*) 'ERROR: The Z_axis time trace has to be smaller or equal to t_now. Check your input file'
         stop
       else if (Z_axis_ref_ts%len .lt. 2) then        
         write(*,*) 'ERROR: The length of the profile for the axis target position must be larger than 1'
         stop
       endif
     endif
-  end subroutine check_Z_axis_profile
+
+    if (sum(abs(rad_FB_amp_ts(1:n_pf_coils)))>1.d-6) then
+      if  (maxval(abs(R_axis_ref_ts%position(:))) < 0) then
+        write(*,*) 'ERROR: target R_axis invalid'
+        stop
+      else if (minval(I_coils_max(1:n_coils)) .lt. 0) then
+        write(*,*) 'ERROR: The maximum value of the coil cannot be smaller than 0.'
+        stop
+      else if (Z_axis_ref_ts%time(1)>t_now) then        
+        write(*,*) 'ERROR: The R_axis time trace has to be smaller or equal to t_now. Check your input file'
+        stop
+      else if (R_axis_ref_ts%len .lt. 2) then        
+        write(*,*) 'ERROR: The length of the profile for the axis target position must be larger than 1'
+        stop
+      endif
+    endif
+
+   
+  end subroutine check_axis_profile
   
   
   
@@ -451,8 +500,12 @@ module vacuum
     vert_FB_amp_ts        = 0.d0   ! amplification factor (of PF coil)
     vert_FB_gain(:)       = 0.d0   ! Proportional, derivative, integral gain of VFB controller
     vert_FB_tact          = 1.d-9  ! Tact of VFB controller
+    rad_FB_amp_ts        = 0.d0   ! amplification factor (of PF coil)
+    rad_FB_gain(:)       = 0.d0   ! Proportional, derivative, integral gain of VFB controller
+    
     I_coils_max           = 1.d99  ! Maximum absolute value for coils
     dZ_axis_integral      = 0.d0   ! Integrated error of the Z-axis
+    dR_axis_integral      = 0.d0   ! Integrated error of the Z-axis
   end subroutine vacuum_preset
   
   
@@ -575,6 +628,7 @@ module vacuum
       
       read(file_handle) current_FB_fact
       read(file_handle) dZ_axis_integral
+      read(file_handle) dR_axis_integral
       read(file_handle) n_coils
       if ( n_coils /= 0 ) then
         if ( allocated(I_coils) ) deallocate(I_coils)
@@ -765,6 +819,7 @@ module vacuum
       
       call HDF5_real_reading(file_id,current_FB_fact,'current_FB_fact')
       call HDF5_real_reading(file_id,dZ_axis_integral,'dZ_axis_integral')
+      call HDF5_real_reading(file_id,dR_axis_integral,'dR_axis_integral')
 
       if ( n_coils /= 0 ) then
         if ( allocated(I_coils) ) deallocate(I_coils)
@@ -815,6 +870,7 @@ module vacuum
       
       write(file_handle) current_FB_fact
       write(file_handle) dZ_axis_integral
+      write(file_handle) dR_axis_integral
       
       if ( (n_coils/=0) .and. (.not. allocated(I_coils)) ) then
         write(*,*) 'ERROR in mod_vacuum.f90:export_restart_vacuum: I_coils not allocated.'
@@ -930,6 +986,7 @@ module vacuum
       call HDF5_integer_saving(file_id,n_coils,"n_coils"//char(0))      
       call HDF5_real_saving(file_id,current_FB_fact,'current_FB_fact'//char(0))
       call HDF5_real_saving(file_id,dZ_axis_integral,'dZ_axis_integral'//char(0))
+      call HDF5_real_saving(file_id,dR_axis_integral,'dR_axis_integral'//char(0))
       if ( (n_coils/=0) .and. (.not. allocated(I_coils)) )  then
         write(*,*) 'ERROR in mod_vacuum.f90:export_restart_vacuum: I_coils not allocated.'
         stop
@@ -1058,6 +1115,7 @@ module vacuum
     
     call MPI_BCAST(current_FB_fact,1,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
     call MPI_BCAST(dZ_axis_integral,1,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+    call MPI_BCAST(dR_axis_integral,1,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
     
   end subroutine broadcast_vacuum
 
