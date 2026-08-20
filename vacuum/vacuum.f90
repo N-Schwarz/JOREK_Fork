@@ -174,13 +174,14 @@ module vacuum
   real*8 :: rad_FB_amp(MAX_COILS) = 0.d0  !< Tune direction and magnitude of vert feedback for each poloidal field coil ([[jorek-starwall-faqs|eq_FAQs]])
   
   ! --- Parameters for the feedback on the vertical position during timestepping (VFB), see ([[active_controller_model_for_vertical_stabilization|documentation]])
-  character(len=256)  :: vert_pos_file = 'none'
+  character(len=256)  :: axis_pos_file = 'none'
   !> Time trace of axis position to match
-  type :: t_Z_axis_ref_ts     
+  type :: t_axis_position_ts     
     integer                :: len = 0      !< Number of points in numerical time trace
     real*8, allocatable    :: time(:)      !< time-values of numerical time trace
-    real*8, allocatable    :: position(:)  !< evolution of vertical axis position over time
-  end type t_Z_axis_ref_ts
+    real*8, allocatable    :: R(:)  !< evolution of the radial axis position over time
+    real*8, allocatable    :: Z(:)  !< evolution of the vertical axis position over time
+  end type t_axis_position_ts
   real*8                        :: start_VFB_ts                  !< start time of active VFB during simulation ([JOREK units])
   real*8                        :: vert_FB_amp_ts(MAX_COILS)     !< Amplitude and sign of vert feedback for each coil ([[jorek-starwall-faqs|eq_FAQs]])
   real*8                        :: rad_FB_amp_ts(MAX_COILS)      !< Amplitude and sign of vert feedback for each coil ([[jorek-starwall-faqs|eq_FAQs]])
@@ -191,8 +192,7 @@ module vacuum
   real*8                        :: dZ_axis_integral              !< Integrated values of Z_axis-Z_reference for controller
   real*8                        :: dR_axis_integral              !< Integrated values of Z_axis-Z_reference for controller
   real*8, allocatable           :: pos_FB_response(:,:)          !< Controller response (PID gain * err) and target axis position
-  type(t_Z_axis_ref_ts), target :: Z_axis_ref_ts                 !< Time trace of axis target position
-  type(t_Z_axis_ref_ts), target :: R_axis_ref_ts                 !< Time trace of axis target position
+  type(t_axis_position_ts), target :: axis_position_ts                 !< Time trace of axis target position
   
   
   
@@ -371,54 +371,45 @@ module vacuum
   !! either the input value Z_axis_ref or the equilibrium value
   subroutine read_axis_profile(my_id)
 
-    use profiles, only: readProf
+    use profiles, only: readProfNeo
     use equil_info, only: ES
     use mpi_mod
     integer :: my_id,err
-
+    real*8, allocatable :: tmp_array(:,:)
     
-    if (allocated(Z_axis_ref_ts%time))     deallocate(Z_axis_ref_ts%time)
-    if (allocated(Z_axis_ref_ts%position)) deallocate(Z_axis_ref_ts%position)
-    if (allocated(R_axis_ref_ts%time))     deallocate(R_axis_ref_ts%time)
-    if (allocated(R_axis_ref_ts%position)) deallocate(R_axis_ref_ts%position)
+    if (allocated(axis_position_ts%time))     deallocate(axis_position_ts%time)
+    if (allocated(axis_position_ts%R)) deallocate(axis_position_ts%R)
+    if (allocated(axis_position_ts%Z)) deallocate(axis_position_ts%Z)
 
     if (my_id .eq. 0) then
-      if (vert_pos_file /= 'none') then
-        call readProf(Z_axis_ref_ts%time, Z_axis_ref_ts%position, Z_axis_ref_ts%len, vert_pos_file)
+      if (axis_pos_file /= 'none') then
+        call readProfNeo(axis_position_ts%time, axis_position_ts%R,axis_position_ts%Z, axis_position_ts%len, axis_pos_file)
       else
         if (Z_axis_ref > 1.d10) Z_axis_ref = ES%Z_axis
         if (R_axis_ref < 0) R_axis_ref = ES%R_axis
-        allocate(Z_axis_ref_ts%time    (2))
-        allocate(Z_axis_ref_ts%position(2))
-        Z_axis_ref_ts%len          =  2
-        Z_axis_ref_ts%time     (1) = -1.d12
-        Z_axis_ref_ts%time     (2) =  1.d12
-        Z_axis_ref_ts%position (1:2) =  Z_axis_ref 
-
-        allocate(R_axis_ref_ts%time    (2))
-        allocate(R_axis_ref_ts%position(2))
-        R_axis_ref_ts%len          =  2
-        R_axis_ref_ts%time     (1) = -1.d12
-        R_axis_ref_ts%time     (2) =  1.d12
-        R_axis_ref_ts%position (1:2) =  R_axis_ref 
-
+        allocate(axis_position_ts%time    (2))
+        allocate(axis_position_ts%R(2))
+        allocate(axis_position_ts%Z(2))
+        axis_position_ts%len          =  2
+        axis_position_ts%time     (1) = -1.d12
+        axis_position_ts%time     (2) =  1.d12
+        axis_position_ts%Z (1:2) =  Z_axis_ref 
+        axis_position_ts%R(1:2) =  R_axis_ref 
       endif
     end if
-    call MPI_bcast(Z_axis_ref,     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
-    call MPI_bcast(R_axis_ref,     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
-    call MPI_bcast(Z_axis_ref_ts%len,                     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
-    if (my_id .gt. 0) allocate(Z_axis_ref_ts%time    (Z_axis_ref_ts%len))
-    if (my_id .gt. 0) allocate(Z_axis_ref_ts%position(Z_axis_ref_ts%len))
-    call MPI_bcast(Z_axis_ref_ts%time,    Z_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
-    call MPI_bcast(Z_axis_ref_ts%position,Z_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
-    call MPI_bcast(R_axis_ref_ts%len,                     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
-    if (my_id .gt. 0) allocate(R_axis_ref_ts%time    (R_axis_ref_ts%len))
-    if (my_id .gt. 0) allocate(R_axis_ref_ts%position(R_axis_ref_ts%len))
-    call MPI_bcast(R_axis_ref_ts%time,    R_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
-    call MPI_bcast(R_axis_ref_ts%position,R_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
 
+    call MPI_bcast(Z_axis_ref,               1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(R_axis_ref,               1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(axis_position_ts%len, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    if (my_id .gt. 0) allocate(axis_position_ts%time    (axis_position_ts%len))
+    if (my_id .gt. 0) allocate(axis_position_ts%R(axis_position_ts%len))
+    if (my_id .gt. 0) allocate(axis_position_ts%Z(axis_position_ts%len))
+    call MPI_bcast(axis_position_ts%time, axis_position_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(axis_position_ts%R,    axis_position_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    call MPI_bcast(axis_position_ts%Z,    axis_position_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
 
-    call check_axis_profile() 
+    call check_axis_profile()
+    
   end subroutine read_axis_profile
   
   
@@ -428,32 +419,32 @@ module vacuum
     use phys_module, only: t_now
 
     if (sum(abs(vert_FB_amp_ts(1:n_pf_coils)))>1.d-6) then
-      if  (maxval(abs(Z_axis_ref_ts%position(:))) > 1.d10) then
+      if  (maxval(abs(axis_position_ts%Z(:))) > 20.) then
         write(*,*) 'ERROR: target Z_axis beyond Machine limits'
         stop
       else if (minval(I_coils_max(1:n_coils)) .lt. 0) then
         write(*,*) 'ERROR: The maximum value of the coil cannot be smaller than 0.'
         stop
-      else if (Z_axis_ref_ts%time(1)>t_now) then        
+      else if (axis_position_ts%time(1)>t_now) then        
         write(*,*) 'ERROR: The Z_axis time trace has to be smaller or equal to t_now. Check your input file'
         stop
-      else if (Z_axis_ref_ts%len .lt. 2) then        
+      else if (axis_position_ts%len .lt. 2) then        
         write(*,*) 'ERROR: The length of the profile for the axis target position must be larger than 1'
         stop
       endif
     endif
 
     if (sum(abs(rad_FB_amp_ts(1:n_pf_coils)))>1.d-6) then
-      if  (maxval(abs(R_axis_ref_ts%position(:))) < 0) then
+      if  (maxval(abs(axis_position_ts%R(:))) < 0) then
         write(*,*) 'ERROR: target R_axis invalid'
         stop
       else if (minval(I_coils_max(1:n_coils)) .lt. 0) then
         write(*,*) 'ERROR: The maximum value of the coil cannot be smaller than 0.'
         stop
-      else if (Z_axis_ref_ts%time(1)>t_now) then        
+      else if (axis_position_ts%time(1)>t_now) then        
         write(*,*) 'ERROR: The R_axis time trace has to be smaller or equal to t_now. Check your input file'
         stop
-      else if (R_axis_ref_ts%len .lt. 2) then        
+      else if (axis_position_ts%len .lt. 2) then        
         write(*,*) 'ERROR: The length of the profile for the axis target position must be larger than 1'
         stop
       endif

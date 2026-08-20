@@ -574,7 +574,7 @@ if (my_id .eq. 0) then
   call MPI_PACK (vert_FB_amp_ts,     MAX_COILS,    MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK (rad_FB_amp_ts,      MAX_COILS,    MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK (I_coils_max,        MAX_COILS,    MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
-  call MPI_PACK(vert_pos_file,             256,MPI_CHARACTER,buffer,bufsize,position,MPI_COMM_WORLD,ierr) 
+  call MPI_PACK(axis_pos_file,             256,MPI_CHARACTER,buffer,bufsize,position,MPI_COMM_WORLD,ierr) 
   
   do i=1, MAX_COILS
     call MPI_PACK (pf_coils(i)%current,            1,    MPI_REAL8,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
@@ -1565,7 +1565,7 @@ if (my_id .ne. 0) then
   call MPI_UNPACK(buffer,bufsize,position,vert_FB_amp_ts, MAX_COILS,    MPI_REAL8,MPI_COMM_WORLD,ierr)
   call MPI_UNPACK(buffer,bufsize,position,rad_FB_amp_ts,  MAX_COILS,    MPI_REAL8,MPI_COMM_WORLD,ierr)
   call MPI_UNPACK(buffer,bufsize,position,I_coils_max,    MAX_COILS,    MPI_REAL8,MPI_COMM_WORLD,ierr)  
-  call MPI_UNPACK(buffer,bufsize,position,vert_pos_file,        256,MPI_CHARACTER,MPI_COMM_WORLD,ierr) 
+  call MPI_UNPACK(buffer,bufsize,position,axis_pos_file,        256,MPI_CHARACTER,MPI_COMM_WORLD,ierr) 
 
 
   do i=1, MAX_COILS

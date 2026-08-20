@@ -2451,8 +2451,8 @@ module vacuum_response
       allocate(pos_FB_response(index_start+nstep,8))
       pos_FB_response = 0.d0
    endif
-   r_ref_inter = interpolProf(R_axis_ref_ts%time, R_axis_ref_ts%position ,  R_axis_ref_ts%len, t_now)
-   z_ref_inter = interpolProf(Z_axis_ref_ts%time, Z_axis_ref_ts%position ,  Z_axis_ref_ts%len, t_now)
+   r_ref_inter = interpolProf(axis_position_ts%time, axis_position_ts%R ,  axis_position_ts%len, t_now)
+   z_ref_inter = interpolProf(axis_position_ts%time, axis_position_ts%Z ,  axis_position_ts%len, t_now)
    pos_FB_response(index_now,7) = z_ref_inter
    pos_FB_response(index_now,8) = r_ref_inter
    if ( t_now>start_VFB_ts .and. sum( abs(vert_FB_amp_ts(1:n_pf_coils)) )>1.e-6 .and. sr%i_tor(1) ==  1 ) then
@@ -2479,6 +2479,7 @@ module vacuum_response
            1.d5  * rad_FB_gain(2)* (R_n - R_p )/ tstep, &
            1.d-3 * rad_FB_gain(3)* dR_axis_integral /)
       pos_FB_response(index_now,4:6) = rad_FB
+
       delta_Icoils_0(1:n_pf_coils) = delta_Icoils_0(1:n_pf_coils) +  sum(rad_FB)*rad_FB_amp_ts(1:n_pf_coils)
       R_p=R_n
     end if
