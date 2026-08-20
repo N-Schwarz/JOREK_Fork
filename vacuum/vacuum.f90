@@ -376,14 +376,18 @@ module vacuum
     use mpi_mod
     integer :: my_id,err
 
+    
+    if (allocated(Z_axis_ref_ts%time))     deallocate(Z_axis_ref_ts%time)
+    if (allocated(Z_axis_ref_ts%position)) deallocate(Z_axis_ref_ts%position)
+    if (allocated(R_axis_ref_ts%time))     deallocate(R_axis_ref_ts%time)
+    if (allocated(R_axis_ref_ts%position)) deallocate(R_axis_ref_ts%position)
+
     if (my_id .eq. 0) then
       if (vert_pos_file /= 'none') then
         call readProf(Z_axis_ref_ts%time, Z_axis_ref_ts%position, Z_axis_ref_ts%len, vert_pos_file)
       else
         if (Z_axis_ref > 1.d10) Z_axis_ref = ES%Z_axis
         if (R_axis_ref < 0) R_axis_ref = ES%R_axis
-        if (allocated(Z_axis_ref_ts%time))     deallocate(Z_axis_ref_ts%time)
-        if (allocated(Z_axis_ref_ts%position)) deallocate(Z_axis_ref_ts%position)
         allocate(Z_axis_ref_ts%time    (2))
         allocate(Z_axis_ref_ts%position(2))
         Z_axis_ref_ts%len          =  2
@@ -391,9 +395,6 @@ module vacuum
         Z_axis_ref_ts%time     (2) =  1.d12
         Z_axis_ref_ts%position (1:2) =  Z_axis_ref 
 
-
-        if (allocated(R_axis_ref_ts%time))     deallocate(R_axis_ref_ts%time)
-        if (allocated(R_axis_ref_ts%position)) deallocate(R_axis_ref_ts%position)
         allocate(R_axis_ref_ts%time    (2))
         allocate(R_axis_ref_ts%position(2))
         R_axis_ref_ts%len          =  2
@@ -406,9 +407,13 @@ module vacuum
     call MPI_bcast(Z_axis_ref,     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
     call MPI_bcast(R_axis_ref,     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
     call MPI_bcast(Z_axis_ref_ts%len,                     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    if (my_id .gt. 0) allocate(Z_axis_ref_ts%time    (Z_axis_ref_ts%len))
+    if (my_id .gt. 0) allocate(Z_axis_ref_ts%position(Z_axis_ref_ts%len))
     call MPI_bcast(Z_axis_ref_ts%time,    Z_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
     call MPI_bcast(Z_axis_ref_ts%position,Z_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
     call MPI_bcast(R_axis_ref_ts%len,                     1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
+    if (my_id .gt. 0) allocate(R_axis_ref_ts%time    (R_axis_ref_ts%len))
+    if (my_id .gt. 0) allocate(R_axis_ref_ts%position(R_axis_ref_ts%len))
     call MPI_bcast(R_axis_ref_ts%time,    R_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
     call MPI_bcast(R_axis_ref_ts%position,R_axis_ref_ts%len, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, err)
 
