@@ -182,17 +182,17 @@ module vacuum
     real*8, allocatable    :: R(:)  !< evolution of the radial axis position over time
     real*8, allocatable    :: Z(:)  !< evolution of the vertical axis position over time
   end type t_axis_position_ts
-  real*8                        :: start_VFB_ts                  !< start time of active VFB during simulation ([JOREK units])
+  real*8                        :: start_PFB_ts                  !< start time of active Position FeedBack during simulation ([JOREK units])
   real*8                        :: vert_FB_amp_ts(MAX_COILS)     !< Amplitude and sign of vert feedback for each coil ([[jorek-starwall-faqs|eq_FAQs]])
   real*8                        :: rad_FB_amp_ts(MAX_COILS)      !< Amplitude and sign of vert feedback for each coil ([[jorek-starwall-faqs|eq_FAQs]])
   real*8                        :: I_coils_max(MAX_COILS)        !< Current limit of each coil ([Ampere])
   real*8                        :: vert_FB_gain(3)               !< Gain parameters for vertical feedback controller
   real*8                        :: rad_FB_gain(3)                !< Gain parameters for vertical feedback controller
-  real*8                        :: vert_FB_tact                  !< Time interval between two controller actions ([JOREK units])
+  real*8                        :: pos_FB_tact                   !< Time interval between two controller actions ([JOREK units])
   real*8                        :: dZ_axis_integral              !< Integrated values of Z_axis-Z_reference for controller
   real*8                        :: dR_axis_integral              !< Integrated values of Z_axis-Z_reference for controller
   real*8, allocatable           :: pos_FB_response(:,:)          !< Controller response (PID gain * err) and target axis position
-  type(t_axis_position_ts), target :: axis_position_ts                 !< Time trace of axis target position
+  type(t_axis_position_ts), target :: axis_position_ts           !< Time trace of axis target position
   
   
   
@@ -492,10 +492,10 @@ module vacuum
     psi_offset_freeb     = 0.d0
 
   ! ---- Parameters for vertical feedback (VFB)
-    start_VFB_ts          = 0.d0
+    start_PFB_ts          = 0.d0
     vert_FB_amp_ts        = 0.d0   ! amplification factor (of PF coil)
     vert_FB_gain(:)       = 0.d0   ! Proportional, derivative, integral gain of VFB controller
-    vert_FB_tact          = 1.d-9  ! Tact of VFB controller
+    pos_FB_tact           = 1.d-9  ! Tact of VFB controller
     rad_FB_amp_ts        = 0.d0   ! amplification factor (of PF coil)
     rad_FB_gain(:)       = 0.d0   ! Proportional, derivative, integral gain of VFB controller
     

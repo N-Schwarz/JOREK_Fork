@@ -2455,11 +2455,11 @@ module vacuum_response
    z_ref_inter = interpolProf(axis_position_ts%time, axis_position_ts%Z ,  axis_position_ts%len, t_now)
    pos_FB_response(index_now,7) = z_ref_inter
    pos_FB_response(index_now,8) = r_ref_inter
-   if ( t_now>start_VFB_ts .and. sum( abs(vert_FB_amp_ts(1:n_pf_coils)) )>1.e-6 .and. sr%i_tor(1) ==  1 ) then
+   if ( t_now>start_PFB_ts .and. sum( abs(vert_FB_amp_ts(1:n_pf_coils)) )>1.e-6 .and. sr%i_tor(1) ==  1 ) then
       Z_n = ES%Z_axis
       if ( Z_p > 1.d9 ) Z_p = Z_n
       dZ_axis_integral = dZ_axis_integral + ( Z_n - z_ref_inter )*tstep
-      if ( (t_now-t_last)>vert_FB_tact ) then 
+      if ( (t_now-t_last)>pos_FB_tact  ) then 
          if (my_id==0) write(*,*) 'Vertical feedback active'
          t_last = t_now
          pos_FB_response(index_now,1:3) =  &
@@ -2470,7 +2470,7 @@ module vacuum_response
       endif
       Z_p = Z_n
    endif
-   if ( t_now>start_VFB_ts .and. sum( abs(rad_FB_amp_ts(1:n_pf_coils)) )>1.e-6 .and. sr%i_tor(1) ==  1 ) then
+   if ( t_now>start_PFB_ts .and. sum( abs(rad_FB_amp_ts(1:n_pf_coils)) )>1.e-6 .and. sr%i_tor(1) ==  1 ) then
       R_n = ES%R_axis
       if ( R_p > 1.d9 ) R_p = R_n
       dR_axis_integral = dR_axis_integral + ( R_n - r_ref_inter )*tstep

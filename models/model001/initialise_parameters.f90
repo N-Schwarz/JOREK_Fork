@@ -85,7 +85,7 @@ namelist /in1/  tstep, nstep, tstep_n, nstep_n,                     &
                 vert_FB_amp_ts, vert_FB_gain, axis_pos_file,        & 
                 rad_FB_amp_ts, rad_FB_gain,                         &
                 delta_psi_GS, newton_GS_fixbnd, newton_GS_freebnd,  &
-                vert_FB_tact, start_VFB_ts, I_coils_max, rad_FB_amp,&
+                pos_FB_tact, start_PFB_ts, I_coils_max, rad_FB_amp, &
                 autodistribute_modes, modes_per_family,             &
                 mode_families_modes, n_mode_families,               &
                 weights_per_family, autodistribute_ranks,           &
