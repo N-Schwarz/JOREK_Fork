@@ -375,7 +375,6 @@ module vacuum
     use equil_info, only: ES
     use mpi_mod
     integer :: my_id,err
-    real*8, allocatable :: tmp_array(:,:)
     
     if (allocated(axis_position_ts%time))     deallocate(axis_position_ts%time)
     if (allocated(axis_position_ts%R)) deallocate(axis_position_ts%R)
