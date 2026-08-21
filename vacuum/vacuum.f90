@@ -173,7 +173,7 @@ module vacuum
   real*8 :: vert_FB_amp(MAX_COILS) = 0.d0 !< Tune direction and magnitude of vert feedback for each poloidal field coil ([[jorek-starwall-faqs|eq_FAQs]])
   real*8 :: rad_FB_amp(MAX_COILS) = 0.d0  !< Tune direction and magnitude of vert feedback for each poloidal field coil ([[jorek-starwall-faqs|eq_FAQs]])
   
-  ! --- Parameters for the feedback on the vertical position during timestepping (VFB), see ([[active_controller_model_for_vertical_stabilization|documentation]])
+  ! --- Parameters for the feedback on the vertical position during timestepping (VFB), see ([[freebnd_tools|documentation]])
   character(len=256)  :: axis_pos_file = 'none'
   !> Time trace of axis position to match
   type :: t_axis_position_ts     
