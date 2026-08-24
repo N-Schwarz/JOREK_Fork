@@ -1072,19 +1072,24 @@ module phys_module
 
     ! ================ for neutrals and impurities ('ncs' and 'ics' coupling schemes) particles ===============
 
-    character(len=8)    :: atom_data_suffix        !< suffix of ADAS data, temporary and should be replaced by relative path instead    
-    logical             :: use_kin_ionisation      !< switch on ionisation* for group 
-                                                   !  *for ics this also includes recombination as it switches on the changing of the particle's charge state               
-    logical             :: use_kin_puffing         !< switch on particle puffing for group    
+    character(len=8)    :: atom_data_suffix        !< suffix of ADAS data, temporary and should be replaced by relative path instead
+    logical             :: use_kin_ionisation      !< switch on ionisation* for group
+                                                   !  *for ics this also includes recombination as it switches on the changing of the particle's charge state
+    logical             :: use_kin_puffing         !< switch on particle puffing for group
     logical             :: use_kin_radiation       !< switch on radiation for group (only line rad* for ncs, line rad + bremsstrahlung + recomb** for ics)
-                                                   !  *line radiation here refers to the radiation resultant from energy level changes of bound electrons 
+                                                   !  *line radiation here refers to the radiation resultant from energy level changes of bound electrons
                                                    !  in neutrals/impurity ions due to collisions with the background plasma. Their spectra is discrete
                                                    !  **recomb radiation results from the release of excess energy when a free electron is captured by an atom
                                                    !  during recombination, and has a continous spectra
     ! ---- neutrals (ncs) specific
-    logical             :: use_kin_cx              !< switch on charge-exchange for group 
+    logical             :: use_kin_cx              !< switch on charge-exchange for group
     logical             :: use_kin_recombination   !< switch on recombination from the plasma fluid to this kinetic neutrals group*
                                                    !  *if 2+ ncs groups are present, how the fluid recombination is divided amongst the groups is not yet implemented
+    character(len=8)    :: species_kind            !< kind of species within the group, either 'atom' or 'molecule' (only meaningful for coupling_scheme='ncs')
+                                                   !  molecules use effective/lumped reaction rates (from molecule_data_suffix) rather than tracking
+                                                   !  internal vibrational/rotational state or an ionised-molecule intermediate species
+    character(len=8)    :: molecule_data_suffix    !< suffix of AMJUEL reaction rate data, only used when species_kind='molecule'
+    character(len=3)    :: dissoc_group_id         !< id of the atomic 'ncs' group that receives this group's dissociation products, only used when species_kind='molecule'
     logical             :: use_kin_neutral_coll    !< switch on neutral self-collisions*
                                                    !  *cross collisions between different neutrals species is not yet supported
                                                    !   For more information on the neutral neutral collisions, see https://jorek.eu/wiki/doku.php?id=particles:neutral_neutral_collisions

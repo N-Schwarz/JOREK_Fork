@@ -30,9 +30,11 @@ type :: particle_group
   logical            :: use_kin_radiation  = .false.      !< switch on line radiation for group
 
   ! --- neutrals only
-  logical            :: use_kin_cx            = .false.   !< switch on charge-exchange for group  
-  logical            :: use_kin_recombination = .false.   !< switch on recombination for group       
-  logical            :: use_kin_neutral_coll  = .false.   !< switch on neutral self-collisions for group       
+  logical            :: use_kin_cx            = .false.   !< switch on charge-exchange for group
+  logical            :: use_kin_recombination = .false.   !< switch on recombination for group
+  logical            :: use_kin_neutral_coll  = .false.   !< switch on neutral self-collisions for group
+  character(len=8)   :: species_kind          = 'atom'    !< kind of species within the group, either 'atom' or 'molecule'
+  character(len=3)   :: dissoc_group_id       = 'non'     !< id of the atomic group receiving dissociation products, only used when species_kind='molecule'
 
   ! --- impurities only
   logical            :: use_kin_bg_collisions = .false.     !< switch on collisions with the background plasma
@@ -109,8 +111,10 @@ subroutine configure_particle_groups(sim)
 
       ! --- ncs only
       sim%groups(i)%use_kin_cx             =  config%use_kin_cx
-      sim%groups(i)%use_kin_recombination  =  config%use_kin_recombination         
+      sim%groups(i)%use_kin_recombination  =  config%use_kin_recombination
       sim%groups(i)%use_kin_neutral_coll   =  config%use_kin_neutral_coll
+      sim%groups(i)%species_kind           =  config%species_kind
+      sim%groups(i)%dissoc_group_id        =  config%dissoc_group_id
 
       ! --- ics only
       sim%groups(i)%use_kin_bg_collisions  =  config%use_kin_bg_collisions

@@ -913,6 +913,9 @@ if (my_id .eq. 0) then
   call MPI_PACK(part_group_configs%use_kin_cx,                 n_part_groups_max,     MPI_LOGICAL,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK(part_group_configs%use_kin_recombination,      n_part_groups_max,     MPI_LOGICAL,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   call MPI_PACK(part_group_configs%use_kin_neutral_coll,       n_part_groups_max,     MPI_LOGICAL,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
+  call MPI_PACK(part_group_configs%species_kind,               n_part_groups_max*8, MPI_CHARACTER,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
+  call MPI_PACK(part_group_configs%molecule_data_suffix,       n_part_groups_max*8, MPI_CHARACTER,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
+  call MPI_PACK(part_group_configs%dissoc_group_id,            n_part_groups_max*3, MPI_CHARACTER,buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   do i=1, n_part_groups_max
     call MPI_PACK(part_group_configs(i)%neutral_coll_dTw,      3,                     MPI_REAL8,  buffer,bufsize,position,MPI_COMM_WORLD,ierr)
   end do
@@ -1907,6 +1910,9 @@ if (my_id .ne. 0) then
   call MPI_UNPACK(buffer,bufsize,position,part_group_configs%use_kin_cx,                 n_part_groups_max,MPI_LOGICAL,MPI_COMM_WORLD,ierr)
   call MPI_UNPACK(buffer,bufsize,position,part_group_configs%use_kin_recombination,      n_part_groups_max,MPI_LOGICAL,MPI_COMM_WORLD,ierr)
   call MPI_UNPACK(buffer,bufsize,position,part_group_configs%use_kin_neutral_coll,       n_part_groups_max,MPI_LOGICAL,MPI_COMM_WORLD,ierr)
+  call MPI_UNPACK(buffer,bufsize,position,part_group_configs%species_kind,               n_part_groups_max*8,MPI_CHARACTER,MPI_COMM_WORLD,ierr)
+  call MPI_UNPACK(buffer,bufsize,position,part_group_configs%molecule_data_suffix,       n_part_groups_max*8,MPI_CHARACTER,MPI_COMM_WORLD,ierr)
+  call MPI_UNPACK(buffer,bufsize,position,part_group_configs%dissoc_group_id,            n_part_groups_max*3,MPI_CHARACTER,MPI_COMM_WORLD,ierr)
   do i=1,n_part_groups_max
     call MPI_UNPACK(buffer,bufsize,position,part_group_configs(i)%neutral_coll_dTw,      3,                MPI_REAL8,  MPI_COMM_WORLD,ierr)
   end do

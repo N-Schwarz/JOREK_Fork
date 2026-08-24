@@ -914,6 +914,9 @@ part_group_configs(:)%use_kin_ionisation     = .false.
 part_group_configs(:)%use_kin_recombination  = .false.
 part_group_configs(:)%use_kin_cx             = .false.
 part_group_configs(:)%use_kin_neutral_coll   = .false.
+part_group_configs(:)%species_kind           = 'atom'
+part_group_configs(:)%molecule_data_suffix   = ''
+part_group_configs(:)%dissoc_group_id        = 'non'
 do i=1,n_part_groups_max
   part_group_configs(i)%neutral_coll_dTw(:)  = -1.d99
 end do

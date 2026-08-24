@@ -1105,6 +1105,11 @@ write(*,'(1x,a)',advance='no') ' USE_DOMM            : '
             write(*,REAL_FMT) 'neutral_coll_dTw,       ',part_group_configs(group_num)%neutral_coll_dTw
             write(*,INTG_FMT) 'ncoll_each_nstep_part,  ',part_group_configs(group_num)%ncoll_each_nstep_part
           endif
+          write(*,CHAR_FMT) 'species_kind,           ',trim(sim%groups(group_num)%species_kind)
+          if (trim(sim%groups(group_num)%species_kind) .eq. 'molecule') then
+            write(*,CHAR_FMT) 'molecule_data_suffix,   ',trim(part_group_configs(group_num)%molecule_data_suffix)
+            write(*,CHAR_FMT) 'dissoc_group_id,        ',trim(sim%groups(group_num)%dissoc_group_id)
+          endif
         endif
 
         ! ics specific
