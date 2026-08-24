@@ -80,9 +80,12 @@ end subroutine check_compatibility_and_determine_coupling_schemes
 
 !> checks that the physics enabled for particle group is compatible with the ncs coupling scheme
 subroutine check_compatibility_ncs(group_num)
+  use mod_atomic_elements, only: atomic_weights
   implicit none
   integer :: group_num
-  
+  integer :: j
+  logical :: found_dissoc_group
+
   !> currently ncs particles must be of type 'particle_kinetic_leapfrog'
   if (trim(part_group_configs(group_num)%type) /= 'particle_kinetic_leapfrog') then
     write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "': "
@@ -98,7 +101,53 @@ subroutine check_compatibility_ncs(group_num)
     write(*,*) "  Please recompile with with_neutrals and with_impurities=.false."
     call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
   endif
-  
+
+  !> species_kind must be one of the two recognised values
+  if (trim(part_group_configs(group_num)%species_kind) /= 'atom' .and. &
+      trim(part_group_configs(group_num)%species_kind) /= 'molecule') then
+    write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "': "
+    write(*,*) "  species_kind='", trim(part_group_configs(group_num)%species_kind), "' is invalid, must be 'atom' or 'molecule'"
+    call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
+  endif
+
+  !> molecular ncs groups need a valid molecule Z and a dissociation-product group to spawn atoms into
+  if (trim(part_group_configs(group_num)%species_kind) == 'molecule') then
+
+    if (part_group_configs(group_num)%Z < lbound(atomic_weights,1) .or. part_group_configs(group_num)%Z > -4) then
+      write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "': "
+      write(*,*) "  species_kind='molecule' requires Z to be one of the molecule codes in mod_atomic_elements"
+      write(*,*) "  (-4=D2, -5=T2, -6=HD), got Z=", part_group_configs(group_num)%Z
+      call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
+    endif
+
+    if (trim(part_group_configs(group_num)%dissoc_group_id) == 'non') then
+      write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "': "
+      write(*,*) "  species_kind='molecule' requires dissoc_group_id to be set to the id of the atomic 'ncs' group"
+      write(*,*) "  that receives this group's dissociation products."
+      call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
+    endif
+
+    found_dissoc_group = .false.
+    do j=1, n_part_groups
+      if (trim(part_group_configs(j)%id) == trim(part_group_configs(group_num)%dissoc_group_id)) then
+        if (trim(part_group_configs(j)%coupling_scheme) /= 'ncs' .or. trim(part_group_configs(j)%species_kind) /= 'atom') then
+          write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "': "
+          write(*,*) "  dissoc_group_id='", trim(part_group_configs(group_num)%dissoc_group_id), &
+                     "' must refer to a group with coupling_scheme='ncs' and species_kind='atom'"
+          call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
+        endif
+        found_dissoc_group = .true.
+        exit
+      endif
+    enddo
+    if (.not. found_dissoc_group) then
+      write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "': "
+      write(*,*) "  dissoc_group_id='", trim(part_group_configs(group_num)%dissoc_group_id), "' does not match any group id"
+      call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
+    endif
+
+  endif
+
 end subroutine check_compatibility_ncs
 
 !> checks that the physics enabled for particle group is compatible with the ics coupling scheme
@@ -199,6 +248,24 @@ subroutine check_no_ncs_params(group_num)
   if (any(part_group_configs(group_num)%neutral_coll_dTw /= -1.d99)) then
     write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "':"
     write(*,*) "  neutral_coll_dTw can only be set for groups with coupling scheme 'ncs'"
+    call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
+  endif
+
+  if (trim(part_group_configs(group_num)%species_kind) /= 'atom') then
+    write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "':"
+    write(*,*) "  species_kind can only be set to 'molecule' for groups with coupling scheme 'ncs'"
+    call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
+  endif
+
+  if (len_trim(part_group_configs(group_num)%molecule_data_suffix) > 0) then
+    write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "':"
+    write(*,*) "  molecule_data_suffix can only be set for groups with coupling scheme 'ncs'"
+    call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
+  endif
+
+  if (trim(part_group_configs(group_num)%dissoc_group_id) /= 'non') then
+    write(*,*) "ERROR: incompatible setting enabled for group '", part_group_configs(group_num)%id, "':"
+    write(*,*) "  dissoc_group_id can only be set for groups with coupling scheme 'ncs'"
     call MPI_ABORT(MPI_COMM_WORLD, 1, ierr)
   endif
 

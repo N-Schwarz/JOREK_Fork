@@ -10,8 +10,16 @@ private
 public :: element_symbols, atomic_weights
 
 !> NOTE: special solution to indicate isotopes of hydrogen -> Deuterium and Tritium
+!> NOTE: special solution to indicate hydrogen-isotope molecules -> HD, T2 and D2, used by
+!> molecular kinetic 'ncs' particle groups (species_kind='molecule' in type_part_group_config).
+!> Their atomic_weights entries are the sum of the two constituent atomic masses (nuclear
+!> binding energy defect neglected, consistent with the precision of the other table entries)
+!> and are used as the default group mass (2x atomic mass for D2/T2) when %mass is not set.
 
-character(len=3), parameter :: element_symbols(-3:118) = [&
+character(len=3), parameter :: element_symbols(-6:118) = [&
+'HD ', & ! -6, Hydrogen deuteride
+'T2 ', & ! -5, Tritium molecule
+'D2 ', & ! -4, Deuterium molecule
 'T  ', & ! -3, Tritium
 'D  ', & ! -2, Deuterium
 'e  ', & ! -1, Electron
@@ -136,7 +144,10 @@ character(len=3), parameter :: element_symbols(-3:118) = [&
 'Uuo']   ! 118, Ununoctium
 
 ! Atomic weights in atomic mass units (averaged over isotope when not specified per isotope)
-real*4, parameter :: atomic_weights(-3:118) = [ &
+real*4, parameter :: atomic_weights(-6:118) = [ &
+3.02204178, & ! -6, Hydrogen deuteride (H + D)
+6.0320984, & ! -5, Tritium molecule (2 x T)
+4.02820356, & ! -4, Deuterium molecule (2 x D)
 3.0160492, & ! -3, Tritium
 2.01410178, & ! -2, Deuterium
 5.48579909e-4, & ! -1, Electron

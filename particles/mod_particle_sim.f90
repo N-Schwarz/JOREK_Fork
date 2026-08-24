@@ -35,6 +35,7 @@ type :: particle_group
   logical            :: use_kin_neutral_coll  = .false.   !< switch on neutral self-collisions for group
   character(len=8)   :: species_kind          = 'atom'    !< kind of species within the group, either 'atom' or 'molecule'
   character(len=3)   :: dissoc_group_id       = 'non'     !< id of the atomic group receiving dissociation products, only used when species_kind='molecule'
+  integer            :: dissoc_group_num      = -1        !< sim%groups(:) index matching dissoc_group_id, resolved in configure_particle_groups once all groups' %id are known
 
   ! --- impurities only
   logical            :: use_kin_bg_collisions = .false.     !< switch on collisions with the background plasma
@@ -86,6 +87,7 @@ subroutine configure_particle_groups(sim)
   use phys_module, only: n_part_groups, part_group_configs, type_part_group_config
   use phys_module, only: part_groups_in_use, deuterium_adas
   use mod_particle_group_id, only: matching_part_config_indices, matching_sim_groups_indices
+  use mod_atomic_elements, only: atomic_weights
 
   implicit none
   class(particle_sim), intent(inout)       :: sim
@@ -105,9 +107,9 @@ subroutine configure_particle_groups(sim)
 
     ! === ncs and ics options
     if (sim%groups(i)%coupling_scheme == 'ncs' .or. sim%groups(i)%coupling_scheme == 'ics') then
-      sim%groups(i)%use_kin_ionisation     =  config%use_kin_ionisation          
-      sim%groups(i)%use_kin_puffing        =  config%use_kin_puffing        
-      sim%groups(i)%use_kin_radiation      =  config%use_kin_radiation 
+      sim%groups(i)%use_kin_ionisation     =  config%use_kin_ionisation
+      sim%groups(i)%use_kin_puffing        =  config%use_kin_puffing
+      sim%groups(i)%use_kin_radiation      =  config%use_kin_radiation
 
       ! --- ncs only
       sim%groups(i)%use_kin_cx             =  config%use_kin_cx
@@ -121,12 +123,28 @@ subroutine configure_particle_groups(sim)
       sim%groups(i)%kin_bg_coll_type       =  config%kin_bg_coll_type
       sim%groups(i)%homma2020_alpha        =  config%homma2020_alpha
       sim%groups(i)%ics_group_idx          =  config%ics_group_idx
-   
-      ! --- Input sanity checks 
-      if (len_trim(config%atom_data_suffix) > 0) then
-        sim%groups(i)%ad =  read_adf11(sim%my_id, trim(part_group_configs(i)%atom_data_suffix))
+
+      ! --- molecular ncs groups use a default mass and a different reaction-data pathway (AMJUEL, not yet
+      !     implemented) instead of ADAS/ADF11, so they are excluded from the ADAS-suffix handling below
+      if (trim(sim%groups(i)%coupling_scheme) == 'ncs' .and. trim(sim%groups(i)%species_kind) == 'molecule') then
+        if (sim%groups(i)%mass <= 0.d0) then
+          if (sim%groups(i)%Z < lbound(atomic_weights,1) .or. sim%groups(i)%Z > ubound(atomic_weights,1)) then
+            write(*,*) "ERROR: particle group '", trim(sim%groups(i)%id), "' has species_kind='molecule' but Z=", &
+                       sim%groups(i)%Z, " is outside the range of mod_atomic_elements' tables."
+            stop
+          endif
+          sim%groups(i)%mass = atomic_weights(sim%groups(i)%Z) ! default: table value (already 2x atomic mass for D2/T2)
+        endif
+        if (len_trim(config%molecule_data_suffix) == 0) then
+          write(*,*) "WARNING: No molecule_data_suffix set for particle group ", trim(sim%groups(i)%id), "."
+        endif
       else
-        if (trim(config%coupling_scheme) == 'ncs') write(*,*) "WARNING: No atom_data_suffix set for particle group ", i, "."
+        ! --- Input sanity checks (atoms and impurities only)
+        if (len_trim(config%atom_data_suffix) > 0) then
+          sim%groups(i)%ad =  read_adf11(sim%my_id, trim(part_group_configs(i)%atom_data_suffix))
+        else
+          if (trim(config%coupling_scheme) == 'ncs') write(*,*) "WARNING: No atom_data_suffix set for particle group ", i, "."
+        endif
       endif
 
       if (trim(sim%groups(i)%coupling_scheme) == 'ncs') then
@@ -153,7 +171,19 @@ subroutine configure_particle_groups(sim)
         endif
       endif
     endif       !> if ncs or ics
-  enddo 
+  enddo
+
+  ! --- resolve dissoc_group_id -> dissoc_group_num for molecular ncs groups, now that all groups' %id are set
+  do i=1, n_part_groups
+    if (trim(sim%groups(i)%coupling_scheme) == 'ncs' .and. trim(sim%groups(i)%species_kind) == 'molecule') then
+      sim%groups(i)%dissoc_group_num = group_num_from_id(sim, sim%groups(i)%dissoc_group_id)
+      if (sim%groups(i)%dissoc_group_num == -1) then
+        write(*,*) "ERROR: particle group '", trim(sim%groups(i)%id), "' has dissoc_group_id='", &
+                   trim(sim%groups(i)%dissoc_group_id), "' which does not match any group id in part_groups_in_use."
+        stop
+      endif
+    endif
+  enddo
 
 end subroutine configure_particle_groups
 

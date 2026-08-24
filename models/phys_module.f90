@@ -1061,7 +1061,10 @@ module phys_module
   !> Contains configuration and settings relating to a particle group
   type :: type_part_group_config
     integer            :: Z                        !< Atomic number of al particles in the group (-1 for electrons, 0 for fieldline-following)
-    real*8             :: mass                     !< Mass of all the particles in the group
+                                                   !  for species_kind='molecule' groups, Z instead selects the molecule via the negative
+                                                   !  codes in mod_atomic_elements (-4=D2, -5=T2, -6=HD), each with its own element_symbols/atomic_weights entry
+    real*8             :: mass                     !< Mass of all the particles in the group. If left at its default (0.d0) for a species_kind='molecule'
+                                                   !  group, it is set to mod_atomic_elements' atomic_weights(Z) (i.e. 2x the atomic mass for D2/T2)
     character(len=3)   :: coupling_scheme          !< three character code for the coupling scheme to use for the group
     real*8             :: n_particles              !< number of super/marker particles allocated for the group (real*8 on purpose)
     character(len=50)  :: type                     !< type of particle for the group (e.g. particle_kinetic_leapfrog)
