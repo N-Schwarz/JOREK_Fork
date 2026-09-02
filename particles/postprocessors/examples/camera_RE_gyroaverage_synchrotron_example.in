@@ -1,0 +1,52 @@
+
+!> input file for camera_RE_gyroaverage_synchrotron_example.f90
+!> JET tokamak, IR/fast visible camera looking at the RE beam from octant 5
+
+ &gyroaverage_synchrotron_example_in
+
+ n_frames             = 1
+ n_times              = 11
+ n_groups             = 1        !< number of particle groups
+ n_spectra            = 1
+ n_wavelengths        = 40
+ write_gc_in_txt       = .false.
+
+ fields_filename       = 'jorek01610'
+ image_filename        = 'pixel_filter_intensities'
+ filename_gc_txt_root  = 'jorek_relativistic_gc_data_'
+
+ /
+
+ &gyroaverage_synchrotron_example_arrays_in
+
+!> list of the particle restart files to be read, one per time (n_times entries)
+ particle_filenames(1)  = 'part_restart000.00339941'
+ particle_filenames(2)  = 'part_restart000.00349941'
+ particle_filenames(3)  = 'part_restart000.00359941'
+ particle_filenames(4)  = 'part_restart000.00369941'
+ particle_filenames(5)  = 'part_restart000.00379941'
+ particle_filenames(6)  = 'part_restart000.00389941'
+ particle_filenames(7)  = 'part_restart000.00399941'
+ particle_filenames(8)  = 'part_restart000.00409941'
+ particle_filenames(9)  = 'part_restart000.00419941'
+ particle_filenames(10) = 'part_restart000.00429941'
+ particle_filenames(11) = 'part_restart000.00439941'
+
+!> JET KDLT-E5WC wavelength interval: 3d-6 - 3.5d-6 [m]
+ min_spectra = 3d-6
+ max_spectra = 3.5d-6
+
+!> pinhole position in the tokamak reference system
+ pinhole_positions = -8.86d-1, -4.002d0, -3.32d-1
+
+!> one pinhole => n_lens_samples=1, JET KLDT-E5WC pixels nx=600,ny=600
+ int_camera_param = 1, 600, 600, 0, 1
+
+!> JET KLDT-E5WC camera inputs:
+!> 1:3 -> half width, half height and orientation of the visual plane angle
+!> 4:6 -> camera focal direction: focal distance, latitude, azimuth
+!> 7:9 -> camera position in the tokamak reference system
+ real_camera_param = 5.23d-1, 5.23d-1, 1.5707963267948966d0, 9.998025d-1,
+                      1.5807965d0, 2.09801d0, -8.86d-1, -4.002d0, -3.32d-1
+
+ /

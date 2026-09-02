@@ -19,6 +19,7 @@ public :: fill_particle_kinetic_relativistic,fill_particle_gc_relativistic
 public :: obtain_particle_charges,allocate_one_particle_list_type
 public :: copy_group_fieldline_B_hat_prev
 public :: compute_test_E_B_fields,compute_test_E_B_normB_gradB_curlb_Dbdt_fields
+public :: compute_test_n_e
 public :: fill_particle_kinetic_relativistic_RE,fill_particle_gc_relativistic_RE
 public :: fill_particles_tokamak,fill_mass_RE
 public :: fill_particle_simulations_no_init
@@ -58,6 +59,9 @@ real*8,parameter :: Z0=1.d-1 !< axis vertical position
 real*8,parameter :: E0=5.3d0 !< toroidal electric field on axis
 real*8,parameter,dimension(3) :: EThetaChi_RE_lowbnd=(/1.d5,0.d0,0.d0/) !< for RE
 real*8,parameter,dimension(3) :: EThetaChi_RE_uppbnd=(/5.d7,PI,2.d0*PI/) !< for RE
+!> parameters for the test electron density (bremsstrahlung)
+real*8,parameter :: N0=5.d19 !< electron density on axis [m^-3]
+real*8,parameter :: Rn0=5.d-1 !< electron density decay length [m]
 !> Interfaces -------------------------------------------------
 interface allocate_one_particle_list_type
   module procedure allocate_one_particle_list_all_types
@@ -76,6 +80,10 @@ end interface compute_test_E_B_fields
 interface compute_test_gradpsi
   module procedure compute_test_gradpsi_parabolic
 end interface compute_test_gradpsi
+
+interface compute_test_n_e
+  module procedure compute_test_n_e_parabolic
+end interface compute_test_n_e
 
 contains
 !> Procedures -------------------------------------------------
@@ -136,6 +144,23 @@ b_field,normB,gradB,curlb,dbdt)
   !> compute the time derivative of the magnetic field direction
   dbdt = 0d0; 
 end subroutine compute_test_E_B_normB_gradB_curlb_Dbdt_fields
+
+!> compute a test electron density profile for unit testing,
+!> using the same simple gaussian-like decay around the
+!> (R0,Z0) magnetic axis used by the parabolic test E,B fields
+!> inputs:
+!>   x: (real8)(3) position in cylindrical coord. (R,Z,phi)
+!> outputs:
+!>   n_e: (real8) electron density [m^-3]
+subroutine compute_test_n_e_parabolic(x,n_e)
+  implicit none
+  !> inputs:
+  real*8,dimension(3),intent(in) :: x
+  !> outputs:
+  real*8,intent(out) :: n_e
+  !> compute the electron density
+  n_e = N0*exp(-5.d-1*(((x(1)-R0)**2+(x(2)-Z0)**2)/(Rn0**2)))
+end subroutine compute_test_n_e_parabolic
 
 !> compute test gradient of the poloidal flux
 !> a parabolic poloidal flux:

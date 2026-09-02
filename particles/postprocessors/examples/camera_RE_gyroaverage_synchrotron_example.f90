@@ -8,12 +8,18 @@
 !> having an IR and fast visible camera looking at the RE beam
 !> from octant 5. Note that the RE toroidal motion
 !> is counter-clockeise. Only one snapshot of the RE beam is 
-!> considered hereafter hence, only one particle population and 
+!> considered hereafter hence, only one particle population and
 !> JOREK MHD fields are used. The program uses kinetic relativistic
 !> or relativistitc gc particles. Relativistic kinetic particles are
-!> transformed to relativistic gc for running the gyroaverage 
+!> transformed to relativistic gc for running the gyroaverage
 !> synchrotron radiation model.
+!> All parameters below are hardcoded to sensible defaults, but can
+!> be overridden at run time by placing a namelist input file named
+!> camera_RE_gyroaverage_synchrotron_example.in next to the executable
+!> (see read_optional_input_namelist for the list of overridable
+!> parameters and the namelist group names).
 program camera_RE_gyroaverage_synchrotron_example
+use mpi
 use constants,                      only: PI
 use mod_mpi_tools,                  only: init_mpi_threads,finalize_mpi_threads
 use particle_tracer
@@ -44,18 +50,18 @@ integer                            :: n_groups,my_id,n_mpis,n_x,ierr
 integer                            :: n_wavelengths,n_spectra
 integer                            :: n_int_camera_param,n_real_camera_param
 integer                            :: n_times,n_frames
-integer,dimension(:),allocatable   :: int_camera_param 
+integer,dimension(:),allocatable   :: int_camera_param
 real*8,dimension(:),allocatable    :: min_spectra,max_spectra,pinhole_positions
 real*8,dimension(:),allocatable    :: real_camera_param,sim_times
 real*8,dimension(:,:),allocatable :: x_pixel_positions,y_pixel_positions
 real*8,dimension(:,:,:,:,:),allocatable :: pixel_filter_values
 character(len=3)                   :: hdf5ext
 character(len=4)                   :: extension
-character(len=17)                  :: fields_filename
-character(len=24)                  :: image_filename
-character(len=27)                  :: filename_gc_txt_root
-character(len=33)                  :: filename_gc_txt
-character(len=60),dimension(:),allocatable :: particle_filenames
+character(len=128)                 :: fields_filename
+character(len=128)                 :: image_filename
+character(len=128)                 :: filename_gc_txt_root
+character(len=140)                 :: filename_gc_txt
+character(len=128),dimension(:),allocatable :: particle_filenames
 
 !> Variable presets -----------------------------------------------------------------------
 extension = '.txt'; hdf5ext = '.h5'
@@ -73,9 +79,9 @@ n_wavelengths = 40
 n_int_camera_param  = 5
 n_real_camera_param = 9
 write_gc_in_txt = .false.
-!> se the list of particle restart files to be read
-allocate(character(len=60)::particle_filenames(n_times)); particle_filenames = '';
-particle_filenames = [character(len=60)::'part_restart000.00339941',&
+!> the list of particle restart files to be read
+allocate(character(len=128)::particle_filenames(n_times)); particle_filenames = '';
+particle_filenames = [character(len=128)::'part_restart000.00339941',&
 'part_restart000.00349941','part_restart000.00359941',&
 'part_restart000.00369941','part_restart000.00379941',&
 'part_restart000.00389941','part_restart000.00399941',&
@@ -97,6 +103,14 @@ real_camera_param = [5.23d-1,5.23d-1,5d-1*PI,9.998025d-1,1.5807965,2.09801,-8.86
 !> Initialisation  ------------------------------------------------------------------------
 !> Initialise MPI communicator
 call init_mpi_threads(my_id,n_mpis,ierr)
+
+!> Optionally override the hardcoded defaults above from a namelist input file, if one
+!> is found in the run directory (see read_optional_input_namelist below for details)
+call read_optional_input_namelist(my_id,n_frames,n_times,n_groups,n_spectra,&
+n_wavelengths,write_gc_in_txt,fields_filename,image_filename,filename_gc_txt_root,&
+particle_filenames,min_spectra,max_spectra,pinhole_positions,int_camera_param,&
+real_camera_param)
+
 !> set the number of particle groups
 n_part_groups = n_groups
 
@@ -124,7 +138,7 @@ write(*,*) 'Reading particle data: completed!'
 
 if(write_gc_in_txt) then
   write(*,*) 'Write particle data in txt file'
-  write(filename_gc_txt,'(A,I2,A)') filename_gc_txt_root,my_id,extension
+  write(filename_gc_txt,'(A,I2,A)') trim(filename_gc_txt_root),my_id,extension
   call dump_relativistic_gc_in_txt(filename_gc_txt,sims_gc)
   write(*,*) 'Write particle data in txt file: completed!'
 endif
@@ -188,6 +202,100 @@ call finalize_mpi_threads(ierr)
 contains
 
 !> Tools ----------------------------------------------------------------------------------
+
+!> Optionally reads runtime parameters from a namelist file, overriding the caller's
+!> hardcoded defaults. Does nothing if input_filename is not found in the run directory,
+!> so pre-generated variants of this example (e.g. the ones produced by
+!> particles/utils/create_temporary_example.py for non-regression testing, which
+!> hardcode their own values and never write that file) are unaffected. When present,
+!> the file must define two namelist groups:
+!>   gyroaverage_synchrotron_example_in:        n_frames,n_times,n_groups,n_spectra,
+!>                                               n_wavelengths,write_gc_in_txt,
+!>                                               fields_filename,image_filename,
+!>                                               filename_gc_txt_root
+!>   gyroaverage_synchrotron_example_arrays_in: particle_filenames,min_spectra,
+!>                                               max_spectra,pinhole_positions,
+!>                                               int_camera_param,real_camera_param
+!> inputs:
+!>   my_id: (integer) mpi rank
+!>   n_frames,n_times,n_groups,n_spectra,n_wavelengths: (integer) default scalar counts
+!>   write_gc_in_txt: (logical) default flag controlling the gc txt dump
+!>   fields_filename,image_filename,filename_gc_txt_root: (character) default filenames
+!>   particle_filenames: (character)(n_times) default particle restart file names
+!>   min_spectra,max_spectra: (real8)(n_spectra) default spectral interval bounds
+!>   pinhole_positions: (real8)(n_x) default pinhole position
+!>   int_camera_param: (integer)(n_int_camera_param) default camera integer inputs
+!>   real_camera_param: (real8)(n_real_camera_param) default camera real inputs
+!> outputs:
+!>   all of the above, replaced by the namelist file content when input_filename exists
+subroutine read_optional_input_namelist(my_id,n_frames,n_times,n_groups,&
+n_spectra,n_wavelengths,write_gc_in_txt,fields_filename,image_filename,&
+filename_gc_txt_root,particle_filenames,min_spectra,max_spectra,&
+pinhole_positions,int_camera_param,real_camera_param)
+  implicit none
+  !> Inputs:
+  integer,intent(in) :: my_id
+  !> Inputs-Outputs:
+  integer,intent(inout) :: n_frames,n_times,n_groups,n_spectra,n_wavelengths
+  logical,intent(inout) :: write_gc_in_txt
+  character(len=*),intent(inout) :: fields_filename,image_filename
+  character(len=*),intent(inout) :: filename_gc_txt_root
+  character(len=128),dimension(:),allocatable,intent(inout) :: particle_filenames
+  real*8,dimension(:),allocatable,intent(inout) :: min_spectra,max_spectra
+  real*8,dimension(:),intent(inout)  :: pinhole_positions,real_camera_param
+  integer,dimension(:),intent(inout) :: int_camera_param
+  !> Variables:
+  logical :: input_file_present
+  integer :: ierr
+  integer,parameter :: in_unit=41
+  character(len=*),parameter :: input_filename=&
+  'camera_RE_gyroaverage_synchrotron_example.in'
+  namelist /gyroaverage_synchrotron_example_in/ n_frames,n_times,n_groups,&
+  n_spectra,n_wavelengths,write_gc_in_txt,fields_filename,image_filename,&
+  filename_gc_txt_root
+  namelist /gyroaverage_synchrotron_example_arrays_in/ particle_filenames,&
+  min_spectra,max_spectra,pinhole_positions,int_camera_param,real_camera_param
+  !> check whether an optional input file is present in the run directory
+  if(my_id.eq.0) inquire(file=trim(input_filename),exist=input_file_present)
+  call MPI_Bcast(input_file_present,1,MPI_LOGICAL,0,MPI_COMM_WORLD,ierr)
+  if(.not.input_file_present) return
+  write(*,*) 'Reading input parameters from ',trim(input_filename),' ...'
+  !> read and broadcast the scalar and filename parameters
+  if(my_id.eq.0) then
+    open(unit=in_unit,file=trim(input_filename),status='old',action='read')
+    read(in_unit,gyroaverage_synchrotron_example_in)
+  endif
+  call MPI_Bcast(n_frames,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(n_times,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(n_groups,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(n_spectra,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(n_wavelengths,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(write_gc_in_txt,1,MPI_LOGICAL,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(fields_filename,len(fields_filename),MPI_CHARACTER,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(image_filename,len(image_filename),MPI_CHARACTER,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(filename_gc_txt_root,len(filename_gc_txt_root),MPI_CHARACTER,0,MPI_COMM_WORLD,ierr)
+  !> n_times and n_spectra may have changed: reallocate the arrays that depend on them
+  !> before reading their (possibly resized) values from the second namelist group
+  if(allocated(particle_filenames)) deallocate(particle_filenames)
+  allocate(particle_filenames(n_times)); particle_filenames = '';
+  if(allocated(min_spectra)) deallocate(min_spectra)
+  allocate(min_spectra(n_spectra)); min_spectra = 0d0;
+  if(allocated(max_spectra)) deallocate(max_spectra)
+  allocate(max_spectra(n_spectra)); max_spectra = 0d0;
+  !> read and broadcast the array parameters
+  if(my_id.eq.0) then
+    read(in_unit,gyroaverage_synchrotron_example_arrays_in)
+    close(in_unit)
+  endif
+  call MPI_Bcast(particle_filenames,size(particle_filenames)*len(particle_filenames),&
+  MPI_CHARACTER,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(min_spectra,size(min_spectra),MPI_DOUBLE,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(max_spectra,size(max_spectra),MPI_DOUBLE,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(pinhole_positions,size(pinhole_positions),MPI_DOUBLE,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(int_camera_param,size(int_camera_param),MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+  call MPI_Bcast(real_camera_param,size(real_camera_param),MPI_DOUBLE,0,MPI_COMM_WORLD,ierr)
+  write(*,*) 'Reading input parameters: completed!'
+end subroutine read_optional_input_namelist
 
 !> Tools for transforming a relativistic kinetic particle simulation
 !> in a relativistic gc simulations or copy the relativistic gc particle
