@@ -1,0 +1,10 @@
+name: Required Check
+
+on:
+  pull_request:
+
+jobs:
+  pass:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Dummy check to require up-to-date"

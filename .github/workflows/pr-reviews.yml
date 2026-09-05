@@ -1,0 +1,69 @@
+name: Request Review from Comments
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  request-review:
+    if: github.event.issue.pull_request != null
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Request reviewers mentioned in comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = context.payload.comment.body;
+
+            const requested = [
+              ...new Set(
+                [...comment.matchAll(/@([A-Za-z0-9-]+)/g)]
+                  .map(m => m[1])
+              )
+            ];
+
+            if (requested.length === 0) {
+              console.log("No reviewers mentioned.");
+              return;
+            }
+
+            const allowed = [];
+
+            for (const username of requested) {
+              try {
+                const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  username
+                });
+
+                const permission = data.permission;
+
+                console.log(`${username}: ${permission}`);
+
+                if (permission !== "none") {
+                  allowed.push(username);
+                }
+              } catch (err) {
+                console.log(`${username} is not a collaborator`);
+              }
+            }
+
+            if (allowed.length === 0) {
+              console.log("No eligible reviewers found.");
+              return;
+            }
+
+            console.log(`Requesting: ${allowed.join(", ")}`);
+
+            await github.rest.pulls.requestReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.issue.number,
+              reviewers: allowed
+            });
