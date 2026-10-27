@@ -127,23 +127,28 @@ subroutine populate_element_rtree_2D(node_list, element_list)
     n_elms_c = int(n, C_INT)
 
     ! 1. Allocate Top-Level Arrays
-    allocate(sizes_c(n))
+    write(*,*) n, allocated(sizes_c)
+    allocate(sizes_c(n),stat=ierr)
+    write(*,*) ierr
+    write(*,*) n, allocated(min_ptrs)
     allocate(min_ptrs(n))
+    write(*,*) n, allocated(max_ptrs)
     allocate(max_ptrs(n))
+    write(*,*) n, allocated(element_data)
     allocate(element_data(n))
-    
+    write(*,*) n, allocated(sizes_c)
     call MPI_Initialized(is_init, ierr)
-
+    write(*,*) "HERE"
     if (is_init) then
       call MPI_COMM_RANK(MPI_COMM_WORLD, my_id, ierr)
     else
       my_id = 0
     endif
-
+    write(*,*) "HERE"
     if (my_id .eq. 0) then
       write(*,*) "Initializing 2D RTree (Axisymmetric)..."
     endif
-
+    write(*,*) "HERE"
     ! 2. Loop over elements
     do i = 1, n
        
@@ -175,7 +180,7 @@ subroutine populate_element_rtree_2D(node_list, element_list)
        max_ptrs(i) = C_LOC(element_data(i)%max_vals)
 
     end do
-
+    write(*,*) "HERE end"
     ! 5. Call C++
     call element_rtree(n_elms_c, sizes_c, min_ptrs, max_ptrs)
 
@@ -652,7 +657,7 @@ subroutine populate_element_rtree_3D(node_list, element_list)
   
   ! Call the C function
   call element_rtree(n_elms_c, sizes_c, min_ptrs, max_ptrs)
-
+  if (allocated(sizes_c)) deallocate(sizes_c)
   ! Cleanup (Assuming C++ copied the data, which ElementTree.Insert usually does)
   rtree_initialized = .true.
 

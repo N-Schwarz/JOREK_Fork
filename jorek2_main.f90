@@ -388,6 +388,7 @@ mpi_required = 0
       ! --- allocate values of nodes
 
       call initial_grid(node_list, element_list, bnd_node_list, bnd_elm_list, my_id, n_mpi)
+      !call import_grid(node_list, element_list, filename, format_rst, ierr)
 
       ! --- Synchronizing MPI processes avoid deadlock issues on some machine
       call MPI_Barrier(MPI_COMM_WORLD,ierr)
@@ -434,6 +435,24 @@ mpi_required = 0
         call import_restart(node_list, element_list, 'jorek_equil_rz', rst_format, ierr)
         if ( ierr /= 0 ) stop
     end if if_not_regrid_from_rz
+    call grid_restart(node_list, element_list)
+    call boundary_from_grid(node_list, element_list, bnd_node_list, bnd_elm_list, .false.)
+    if ( (my_id == 0) .and. (.not. bench_without_plot) ) then
+      call plot_grid(node_list,element_list,bnd_elm_list,bnd_node_list,.true.,.false.,'initial2')
+    end if
+
+    if ( freeb_equil2) then
+      freeboundary_equil = .true.
+      call get_vacuum_response(my_id, node_list, bnd_elm_list, bnd_node_list, freeboundary_equil,  &
+          resistive_wall)
+      call update_response(my_id,tstep,  resistive_wall)
+      call import_external_fields('coil_field.dat', my_id)
+      call set_coil_curr_time_trace()
+      if ( (.not. restart) .or. (.not. wall_curr_initialized) ) call init_wall_currents(my_id, resistive_wall)
+    end if
+    call equilibrium(my_id, node_list, element_list, bnd_node_list, bnd_elm_list, xpoint,xcase, .false.)
+    ! --- Compute the plasma equilibrium
+    call equilibrium(my_id, node_list, element_list, bnd_node_list, bnd_elm_list, xpoint,xcase, .false.)
 
     ! --- Determine a flux surface aligned grid and re-calculate the equilibrium on it
     if (n_flux > 1) then

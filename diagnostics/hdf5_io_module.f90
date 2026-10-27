@@ -2206,6 +2206,7 @@ module hdf5_io_module
     !*** read the character data to the dataset ***
     !***   using default transfer properties  ***
     dim(1) = size(array1D,1)
+    write(*,*) "dim1", dim(1), type_id
     if (present(start)) then
       call H5Dget_space_f(dataset,filespace,error)
       call H5Screate_simple_f(1,dim,dataspace,error)
