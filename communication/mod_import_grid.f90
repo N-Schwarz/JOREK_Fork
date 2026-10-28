@@ -123,7 +123,9 @@ subroutine import_hdf5_grid(node_list, element_list, filename, format_rst, error
     
   !write(*,'(2(A,i5))') ' Importing ',n_tor_tmp,' harmonics with n_period=', n_period_tmp 
   call HDF5_integer_reading(file_id,n_nodes_tmp,"n_nodes")
-  !  n_dof_tmp=n_dof
+  call HDF5_integer_reading(file_id,n_dof_tmp,"n_dof")
+  n_degrees_tmp =n_degrees
+  write(*,*) "n_dof", n_dof_tmp, n_degrees
   node_list%n_nodes =  n_nodes_tmp
   write(*,*) "NODES", n_nodes_tmp, node_list%n_nodes
   call HDF5_integer_reading(file_id,element_list%n_elements,"n_elements")
