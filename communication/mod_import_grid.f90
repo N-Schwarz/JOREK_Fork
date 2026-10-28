@@ -196,7 +196,7 @@ subroutine import_hdf5_grid(node_list, element_list, filename, format_rst, error
     element_list%element(i)%nref                    = 0
   end do
 
-  call  update_neighbours(node_list,element_list, force_rtree_initialize=.true.)
+!  call  update_neighbours(node_list,element_list, force_rtree_initialize=.true.)
 
     
   treat_axis = .false.

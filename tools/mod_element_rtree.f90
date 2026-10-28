@@ -129,7 +129,7 @@ subroutine populate_element_rtree_2D(node_list, element_list)
     ! 1. Allocate Top-Level Arrays
     write(*,*) n, allocated(sizes_c)
     allocate(sizes_c(n),stat=ierr)
-    write(*,*) ierr
+    write(*,*) ierr, 'allocation error'
     write(*,*) n, allocated(min_ptrs)
     allocate(min_ptrs(n))
     write(*,*) n, allocated(max_ptrs)
@@ -183,7 +183,9 @@ subroutine populate_element_rtree_2D(node_list, element_list)
     write(*,*) "HERE end"
     ! 5. Call C++
     call element_rtree(n_elms_c, sizes_c, min_ptrs, max_ptrs)
-
+    write(*,*) n, allocated(sizes_c)
+    if (allocated(sizes_c)) deallocate(sizes_c)
+    write(*,*) n, allocated(sizes_c), 'end routine'
     rtree_initialized = .true.
 
   end subroutine populate_element_rtree_2D
