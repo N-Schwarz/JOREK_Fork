@@ -33,7 +33,7 @@ integer :: tmp_elemnode(nodes_per_elem)
 integer :: elem_component(n_nodes_max/2)
 integer :: n_nodes, n_elems, ierr, i, j, ifile = 143, min_elem, max_elem
 
-integer :: nelems_comp, istart, iend
+integer :: nelems_comp, istart, iend, ndof
 integer :: ncomponents, comp_start(n_components_max), comp_end(n_components_max)
 character(len=80) :: buffer, dir_struct
 character(len=3) :: ic
@@ -42,7 +42,7 @@ character(len=20) :: comp_name(n_components_max)
 character(len=1), parameter :: lf = char(10)
 character(len=20), parameter :: node_file='x.dat', elem_file='ix.dat'
 
-logical :: include_struct(n_components_max) = .true.
+logical :: include_struct(n_components_max) = .true., no_current = .false.
 
 ! for current conversion
 integer(HID_T)     :: file_id
@@ -57,7 +57,7 @@ real*8, allocatable, dimension(:,:,:) :: gmat
 integer, allocatable :: ndofel(:), ind_g(:,:), full_glob(:,:)
 
 
-namelist /CARIDDI_plot/ phimin, phimax, ncomponents, comp_start, comp_end, comp_name, dir_struct
+namelist /CARIDDI_plot/ phimin, phimax, ncomponents, comp_start, comp_end, comp_name, dir_struct, no_current
 
 dir_struct = './'
 
@@ -65,6 +65,7 @@ ncomponents  = 1
 comp_start   = 0
 comp_end     = 0
 comp_name(1) ='CARIDDI_all'
+no_current   = .false.
 
 open(42, file='CARIDDI_plot.nml', action='read', status='old', iostat=ierr)
 if ( ierr == 0 ) then
@@ -172,36 +173,44 @@ do
   if ( ierr /= 0 ) exit
   ind_last=i
 end do
+ndof = ind_last
 close(13)
 l1=maxval(ij_glob(:,1));l2=maxval(ij_glob(:,2))
 
 allocate(full_glob(l1,l2))
 full_glob=0.d0
-do i =1,ind_last
+do i =1,ndof
   full_glob(ij_glob(i,1),ij_glob(i,2)) = ind_glob(i)
 end do
 
-! ================= Convert wall currents =================================
-call HDF5_open('jorek_restart.h5',file_id,error)
-call HDF5_integer_reading(file_id,n_wall_curr,"n_wall_curr")
+if (.not. no_current) then
+  ! ================= Convert wall currents =================================
+  call HDF5_open('jorek_restart.h5',file_id,error)
+  call HDF5_integer_reading(file_id,n_wall_curr,"n_wall_curr")
 
-allocate(wall_curr(n_wall_curr),S(n_wall_curr,n_wall_curr),wall_curr_real(n_wall_curr))
-call HDF5_array1D_reading(file_id,wall_curr,"wall_curr")
-call HDF5_close(file_id)
+  allocate(wall_curr(n_wall_curr),S(n_wall_curr,n_wall_curr),wall_curr_real(n_wall_curr))
+  call HDF5_array1D_reading(file_id,wall_curr,"wall_curr")
+  call HDF5_close(file_id)
 
-! Load S matrix
-open(13, file=trim(dir_struct)//'S_mat.bin', status='old', form='unformatted', access='stream', action='read')
-read(13) S
-close(13)
-do i = 1, n_wall_curr
-   wall_curr_real(i) = sum(S(i,:)*wall_curr)
-end do
-deallocate(wall_curr)
+  ! Load S matrix
+  open(13, file=trim(dir_struct)//'S_mat.bin', status='old', form='unformatted', access='stream', action='read')
+  read(13) S
+  close(13)
+  do i = 1, n_wall_curr
+    wall_curr_real(i) = sum(S(i,:)*wall_curr)
+  end do
+  deallocate(wall_curr)
 
-allocate(wall_curr_el(n_elems),jx(n_elems),jy(n_elems),jz(n_elems), jphi(n_elems))
-wall_curr_el=0.d0
+else
+  
+  allocate(wall_curr_real(ndof))
+
+end if
+
 
 ! ----------------- Calculate current density in element center of mass ----------------------------------
+allocate(wall_curr_el(n_elems),jx(n_elems),jy(n_elems),jz(n_elems), jphi(n_elems))
+wall_curr_el=0.d0
 jx=0.d0;   jy=0.d0;    jz=0.d0
 do i = 1, n_elems
   do j = 1, ndofel(i)
