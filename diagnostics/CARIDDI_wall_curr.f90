@@ -48,16 +48,16 @@ logical :: include_struct(n_components_max) = .true., no_current = .false.
 integer(HID_T)     :: file_id
 integer :: n_wall_curr,l1,l2,ind_last, error
 integer :: ij_glob(ind_max,2)=0, ind_glob(ind_max)=0, dof
-real*8  :: xyz_e(3), phi
+real*8  :: xyz_e(3), phi, eta(n_components_max)
 real*8, allocatable, dimension(:)     :: wall_curr, wall_curr_real, wall_curr_el
-real*8, allocatable, dimension(:)     :: jx, jy, jz, jphi
+real*8, allocatable, dimension(:)     :: jx, jy, jz, jphi, eta_all
 real*8, allocatable, dimension(:,:)   :: S, gmat_sp
 real*8, allocatable, dimension(:,:,:) :: gmat
 
 integer, allocatable :: ndofel(:), ind_g(:,:), full_glob(:,:)
 
 
-namelist /CARIDDI_plot/ phimin, phimax, ncomponents, comp_start, comp_end, comp_name, dir_struct, no_current
+namelist /CARIDDI_plot/ phimin, phimax, ncomponents, comp_start, comp_end, comp_name, dir_struct, no_current, eta
 
 dir_struct = './'
 
@@ -66,6 +66,7 @@ comp_start   = 0
 comp_end     = 0
 comp_name(1) ='CARIDDI_all'
 no_current   = .false.
+eta          = -0.9e9
 
 open(42, file='CARIDDI_plot.nml', action='read', status='old', iostat=ierr)
 if ( ierr == 0 ) then
@@ -209,7 +210,7 @@ end if
 
 
 ! ----------------- Calculate current density in element center of mass ----------------------------------
-allocate(wall_curr_el(n_elems),jx(n_elems),jy(n_elems),jz(n_elems), jphi(n_elems))
+allocate(wall_curr_el(n_elems),jx(n_elems),jy(n_elems),jz(n_elems), jphi(n_elems),eta_all(n_elems))
 wall_curr_el=0.d0
 jx=0.d0;   jy=0.d0;    jz=0.d0
 do i = 1, n_elems
@@ -225,6 +226,7 @@ do i = 1, n_elems
   phi = atan2(xyz_e(2),xyz_e(1))
   jphi(i) = -jx(i) * sin(phi) + jy(i) * cos(phi)
   wall_curr_el(i) = (jx(i)**2+jy(i)**2+jz(i)**2)**.5
+  eta_all(i) = eta(elem_component(i))
 end do
 
 
@@ -242,6 +244,7 @@ do i = 1, ncomponents
       call write_header_scalar(ifile, nelems_comp)
       call write_scalar('j_w(Am^-3)', ifile, istart, iend, wall_curr_el)
       call write_scalar('I*e_phi', ifile, istart, iend, jphi)
+      call write_scalar('eta(Ohm.m)', ifile, istart, iend, eta_all)
       call write_vector('J', ifile, istart, iend, jx, jy, jz)
       close(ifile)
     end do
@@ -253,6 +256,7 @@ do i = 1, ncomponents
     call write_header_scalar(ifile, nelems_comp)
     call write_scalar('j_w(Am^-3)', ifile, istart, iend, wall_curr_el)
     call write_scalar('I*e_phi', ifile, istart, iend, jphi)
+    call write_scalar('eta(Ohm.m)', ifile, istart, iend, eta_all)
     call write_vector('J', ifile, istart, iend, jx, jy, jz)
     close(ifile)
   end if
